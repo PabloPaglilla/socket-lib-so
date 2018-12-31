@@ -1,11 +1,14 @@
 import argparse
 import xml.etree.ElementTree as ET
 
-import templates
+import templates, exceptions
 
 type_sizes = {
+	'int8_t': 1,
 	'uint8_t': 1,
+	'int16_t': 2,
 	'uint16_t': 2,
+	'int32_t': 4,
 	'uint32_t': 4,
 	'char': 1
 }
@@ -24,6 +27,11 @@ def get_file_paths(root, provided_path):
 		base_path = provided_path
 	return base_path + '.h', base_path + '.c'
 
+def get_element_attribute(element, attribute):
+	if not attribute in element.attrib:
+		raise exceptions.MissingAttributeException(attribute, element)
+	return element.attrib[attribute]
+
 def generate_header(root, header_path):
 	header = open(header_path, 'w')
 	header.write(templates.header_includes)
@@ -40,7 +48,7 @@ def generate_header(root, header_path):
 def generate_enum_definitions(file, root):
 	template = templates.enum_definition
 	for enum in root.iter('enum'):
-		enum_name = enum.attrib['name']
+		enum_name = get_element_attribute(enum, 'name')
 		values = list(map(
 			lambda x: x.text, 
 			enum.iter('entry')))
@@ -50,49 +58,49 @@ def generate_enum_definitions(file, root):
 			values=values))
 
 def generate_msg_defines(file, message):
-	msg_name = message.attrib['name']
+	msg_name = get_element_attribute(message, 'name')
 	s = templates.message_defines_template.format(
 		msg_name_upper=msg_name.upper(),
 		msg_size = get_message_size(message))
 	file.write(s)
 
-def get_field_size(field):
-	field_type = field.attrib['type']
-	if is_array_type(field):
-		type_name = field_type[0:-2]
-		type_size = type_sizes[type_name]
-		amount = int(field.attrib['len'])
-		return type_size * amount
-	return type_sizes[field_type]
-
 def get_message_size(message):
 	sizes = list(map(get_field_size, message.iter('field')))
 	return sum(sizes)
 
+def get_field_size(field):
+	field_type = get_element_attribute(field, 'type')
+	if is_array_type(field):
+		type_name = field_type[0:-2]
+		type_size = type_sizes[type_name]
+		amount = int(get_element_attribute(field, 'len'))
+		return type_size * amount
+	return type_sizes[field_type]
+
 def generate_struct(file, message):
-	msg_name = message.attrib['name']
+	msg_name = get_element_attribute(message, 'name')
 	field_declarations = list(map(field_declaration, message.iter('field')))
 	field_declarations = "\n\t".join(field_declarations)
 	s = templates.struct_declaration_template.format(
 		msg_name=msg_name, field_declarations=field_declarations)
 	file.write(s)
 
+def field_declaration(field):
+	return field_description(field) + ';'
+
 def field_description(field):
-	field_type = field.attrib['type']
+	field_type = get_element_attribute(field, 'type')
 	field_name = field.text
 	array_def = ''
 	if is_array_type(field):
 		field_type = field_type[0:-2]
-		array_def = '[' + field.attrib['len'] + ']'
+		array_def = '[' + get_element_attribute(field, 'len') + ']'
 	return templates.field_description_template.format(
 		field_type=field_type, field_name=field_name,
 		array_def=array_def).strip('\n ').strip(' ')
 
-def field_declaration(field):
-	return field_description(field) + ';'
-
 def generate_signatures(file, message):
-	msg_name = message.attrib['name']
+	msg_name = get_element_attribute(message, 'name')
 	create_params = create_parameters(message)
 	s = templates.header_signatures.format(
 		msg_name=msg_name, create_parameters=create_params)
@@ -117,7 +125,7 @@ def generate_source(root, source_path):
 	generate_handling_functions(source, root)
 
 def generate_functions(file, message):
-	msg_name = message.attrib['name']
+	msg_name = get_element_attribute(message, 'name')
 	create_params = create_parameters(message)
 	ntoh = net_to_host_handling(message)
 	hton = host_to_net_handling(message)
@@ -152,7 +160,7 @@ def convert(message, convert_getter):
 	return ret
 
 def array_convertion(field_name, convertion, field):
-	lng = field.attrib['len']
+	lng = get_element_attribute(field, 'len')
 	return templates.array_field_converter.format(
 					field_name=field_name, len=lng,
 					convertion=convertion
@@ -199,8 +207,8 @@ def fields_assignment(message):
 	return ret
 
 def array_field_assignment(field_name, field):
-	lng = field.attrib['len']
-	field_type = field.attrib['type'][0:-2]
+	lng = get_element_attribute(field, 'len')
+	field_type = get_element_attribute(field, 'type')[0:-2]
 	return templates.array_field_assignment.format(
 		field_name=field_name, len=lng,
 		field_type=field_type)
@@ -219,7 +227,7 @@ def decoder_switch_cases(root):
 	ret = ''
 	template = templates.decoder_switch_case
 	for message in root.iter('message'):
-		msg_name = message.attrib['name']
+		msg_name = get_element_attribute(message, 'name')
 		ret += '\n\t' + template.format(
 			msg_name=msg_name,
 			msg_name_upper=msg_name.upper())
