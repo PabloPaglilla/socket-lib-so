@@ -14,3 +14,13 @@ class MissingAttributeException(Exception):
 				attr=attribute, 
 				element=element_to_xml_string(element))
 		super(MissingAttributeException, self).__init__(message)
+
+class InvalidFieldTypeException(Exception):
+
+	def __init__(self, element_type, element, message=None):
+		self.element_type = element_type
+		self.element = element
+		if message is None:
+			message = 'Invalid type {element_type} at {element}'.format(
+				element_type=element_type, element=element_to_xml_string(element))
+		super(InvalidFieldTypeException, self).__init__(message)	
