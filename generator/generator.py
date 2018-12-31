@@ -10,11 +10,19 @@ type_sizes = {
 	'char': 1
 }
 
-def generate(xml_source, header_path, source_path):
+def generate(xml_source, provided_path):
 	tree = ET.parse(xml_source)
 	root = tree.getroot()
+	header_path, source_path = get_file_paths(root, provided_path)
 	generate_header(root, header_path)
 	generate_source(root, source_path)
+
+def get_file_paths(root, provided_path):
+	if provided_path.endswith('/') or provided_path == '':
+		base_path = provided_path + root.tag
+	else:
+		base_path = provided_path
+	return base_path + '.h', base_path + '.c'
 
 def generate_header(root, header_path):
 	header = open(header_path, 'w')
@@ -223,15 +231,13 @@ def parse_cli_arguments():
 	parser.add_argument('xml_source',
 		help='XML definition of the protocol')
 	parser.add_argument('-o', '--output',
-		help='Name for the generated .c and .h files.',
-		default='protocol')
+		help='Path for the generated .c and .h files.',
+		default='')
 	return parser.parse_args()
 
 def main():
 	arguments = parse_cli_arguments()
-	header_path = arguments.output + '.h'
-	source_path = arguments.output + '.c'
-	generate(arguments.xml_source, header_path, source_path)
+	generate(arguments.xml_source, arguments.output)
 
 if __name__ == '__main__':
 	main()
