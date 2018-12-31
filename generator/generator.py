@@ -1,10 +1,7 @@
-from sys import argv, exit
+import argparse
 import xml.etree.ElementTree as ET
 
 import templates
-
-header_path = 'protocol_gen.h'
-source_path = 'protocol_gen.c'
 
 type_sizes = {
 	'uint8_t': 1,
@@ -13,13 +10,13 @@ type_sizes = {
 	'char': 1
 }
 
-def parse(xml_source):
+def generate(xml_source, header_path, source_path):
 	tree = ET.parse(xml_source)
 	root = tree.getroot()
-	generate_header(root)
-	generate_source(root)
+	generate_header(root, header_path)
+	generate_source(root, source_path)
 
-def generate_header(root):
+def generate_header(root, header_path):
 	header = open(header_path, 'w')
 	header.write(templates.header_includes)
 	header.write(templates.header_defines)
@@ -68,7 +65,6 @@ def generate_struct(file, message):
 	msg_name = message.attrib['name']
 	field_declarations = list(map(field_declaration, message.iter('field')))
 	field_declarations = "\n\t".join(field_declarations)
-	print(msg_name, field_declarations)
 	s = templates.struct_declaration_template.format(
 		msg_name=msg_name, field_declarations=field_declarations)
 	file.write(s)
@@ -105,7 +101,7 @@ def create_parameters_passing(message):
 def is_array_type(field):
 	return type_contains(field, '[]')
 
-def generate_source(root):
+def generate_source(root, source_path):
 	source = open(source_path, "w")
 	source.write(templates.source_includes)
 	for message in root.iter('message'):
@@ -221,9 +217,21 @@ def decoder_switch_cases(root):
 			msg_name_upper=msg_name.upper())
 	return ret
 
-if __name__ == '__main__':
-	if len(argv) < 2:
-		print("Usage: python generator.py file_path")
-		exit(1)
+def parse_cli_arguments():
+	parser = argparse.ArgumentParser(
+		description='C protocol generator.')
+	parser.add_argument('xml_source',
+		help='XML definition of the protocol')
+	parser.add_argument('-o', '--output',
+		help='Name for the generated .c and .h files.',
+		default='protocol')
+	return parser.parse_args()
 
-	parse(argv[1])
+def main():
+	arguments = parse_cli_arguments()
+	header_path = arguments.output + '.h'
+	source_path = arguments.output + '.c'
+	generate(arguments.xml_source, header_path, source_path)
+
+if __name__ == '__main__':
+	main()
