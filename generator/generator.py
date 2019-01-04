@@ -1,5 +1,7 @@
 import argparse
 import xml.etree.ElementTree as ET
+from sys import stderr
+from os import path, remove
 
 import templates, exceptions
 
@@ -17,8 +19,36 @@ def generate(xml_source, provided_path):
 	tree = ET.parse(xml_source)
 	root = tree.getroot()
 	header_path, source_path = get_file_paths(root, provided_path)
-	generate_header(root, header_path)
-	generate_source(root, source_path)
+	try:
+		header = open(header_path, 'w')
+		source = open(source_path, 'w')
+	except OSError as error:
+		err = "Could not open or create file {path}".format(
+			path=error.filename)
+		stderr.write(err)
+		if not header.closed:
+			# If the header was succesfully opened and what failed
+			# was the source, we close and delete the header
+			header.close()
+			remove_file(header_path)
+		return
+	try:
+		generate_header(root, header)
+		generate_source(root, source)
+	except exceptions.GeneratorException as error:
+		stderr.write(error.message + '\n')
+		remove_file(header_path)
+		remove_file(source_path)
+	finally:
+		header.close()
+		source.close()
+
+def remove_file(file_path):
+	if path.isfile(file_path):
+		try:
+			remove(file_path)
+		except OSError:
+			pass
 
 def get_file_paths(root, provided_path):
 	if provided_path.endswith('/') or provided_path == '':
@@ -47,8 +77,7 @@ def get_type(element):
 		raise exceptions.InvalidFieldTypeException(element_type, element)
 	return element_type
 
-def generate_header(root, header_path):
-	header = open(header_path, 'w')
+def generate_header(root, header):
 	header.write(templates.header_includes)
 	header.write(templates.header_defines)
 	generate_enum_definitions(header, root)
@@ -58,7 +87,6 @@ def generate_header(root, header_path):
 		generate_signatures(header, message)
 	header.write(templates.msg_handling_functions_declarations)
 	header.write(templates.header_close)
-	header.close()
 
 def generate_enum_definitions(file, root):
 	template = templates.enum_definition
@@ -132,8 +160,7 @@ def create_parameters_passing(message):
 def is_array_type(field):
 	return type_contains(field, '[]')
 
-def generate_source(root, source_path):
-	source = open(source_path, "w")
+def generate_source(root, source):
 	source.write(templates.source_includes)
 	for message in root.iter('message'):
 		generate_functions(source, message)
