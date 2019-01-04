@@ -28,6 +28,7 @@ def generate(xml_source, provided_path):
 	root = tree.getroot()
 	header_path, source_path = get_file_paths(root, provided_path)
 	header_name = header_path.split('/')[-1]
+	header = source = None
 	try:
 		header = open(header_path, 'w')
 		source = open(source_path, 'w')
@@ -35,7 +36,7 @@ def generate(xml_source, provided_path):
 		err = "Could not open or create file {path}".format(
 			path=error.filename)
 		stderr.write(err)
-		if not header.closed:
+		if header and not header.closed:
 			# If the header was succesfully opened and what failed
 			# was the source, we close and delete the header
 			header.close()
