@@ -102,8 +102,7 @@ int decode(void *data, void *buff) {{
 	// Puntero a la función que decodifica
 	decoder_t decoder;
 
-	switch(msg_id) {{
-		{switch_cases}
+	switch(msg_id) {{{switch_cases}
 		default:
 			return -1;
 	}}
@@ -116,14 +115,14 @@ int decode(void *data, void *buff) {{
 }}
 
 int pack_msg(uint8_t msg_id, uint8_t body_size, void *msg_body, uint8_t *buff) {{
-	int msg_size = body_size + sizeof(msg_id) + sizeof(body_size);
+	int msg_size = body_size + sizeof(msg_id);
 	if(msg_size > 255) {{
 		return -1;
 	}}
 	buff[0] = (uint8_t) msg_size;
 	buff[1] = msg_id;
 	memcpy(buff + 2, msg_body, body_size);
-	return msg_size;
+	return msg_size + 1;
 }}
 """
 
@@ -131,5 +130,4 @@ decoder_switch_case = """
 		case {msg_name_upper}_ID:
 			decoder = &decode_{msg_name};
 			body_size = {msg_name_upper}_SIZE;
-			break;
-"""
+			break;"""

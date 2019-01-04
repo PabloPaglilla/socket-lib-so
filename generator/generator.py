@@ -15,6 +15,8 @@ type_sizes = {
 	'char': 1
 }
 
+UINT8_MAX = 2 ** 8 - 1
+
 def generate(xml_source, provided_path):
 
 	"""Genera los archivos
@@ -163,7 +165,10 @@ def get_message_size(message):
 	   	-message: el elemento xml del mensaje"""
 
 	sizes = list(map(get_field_size, message.iter('field')))
-	return sum(sizes)
+	total_size = sum(sizes)
+	if total_size >= UINT8_MAX:
+		raise exceptions.MessageTooBigException(get_name(message), total_size)
+	return total_size
 
 def get_field_size(field):
 
