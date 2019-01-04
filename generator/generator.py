@@ -27,6 +27,7 @@ def generate(xml_source, provided_path):
 	tree = ET.parse(xml_source)
 	root = tree.getroot()
 	header_path, source_path = get_file_paths(root, provided_path)
+	header_name = header_path.split('/')[-1]
 	try:
 		header = open(header_path, 'w')
 		source = open(source_path, 'w')
@@ -42,7 +43,7 @@ def generate(xml_source, provided_path):
 		return
 	try:
 		generate_header(root, header)
-		generate_source(root, source)
+		generate_source(root, source, header_name)
 	except exceptions.GeneratorException as error:
 		stderr.write(error.message + '\n')
 		remove_file(header_path)
@@ -273,14 +274,15 @@ def is_array_type(field):
 
 	return type_contains(field, '[]')
 
-def generate_source(root, source):
+def generate_source(root, source, header_name):
 
 	"""Genera el source file.
 	   Parametros:
 		-root: el elemento root del archivo xml
 		-header: el objeto archivo al que escribir"""
 
-	source.write(templates.source_includes)
+	source.write(templates.source_includes.format(
+		header_name=header_name))
 	for message in root.iter('message'):
 		generate_functions(source, message)
 	generate_handling_functions(source, root)

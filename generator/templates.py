@@ -1,11 +1,11 @@
 
-header_includes = """#include<stdint.h> 
+header_includes = """#include <stdint.h> 
 """
 
 source_includes = """#include <stdint.h>
 #include <string.h>
 #include <netinet/in.h>
-#include "protocol_gen.h"
+#include "{header_name}"
 """
 
 header_defines = """
