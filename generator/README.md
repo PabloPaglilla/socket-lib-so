@@ -62,7 +62,7 @@ La definición del protocolo se realiza en un archivo xml con el siguiente forma
 	* Cada `entry` lleva su nombre definido entre el tag de apertura y el tag de cierre.
 * Dentro del tag `messages` se definen los mensajes.
 	* Cada `message` lleva un atributo `id`, un número entre 0 y 255 que será su identificador, y un atributo `name` con su nombre. Dentro del mensaje se definen sus campos con los tags `field`.
-	* Cada `field` puede ser un campo simple o un array. En caso de ser un elemento único, su atributo `type` lleva su tipo. En caso de ser un array; el atributo `type` lleva su tipo seguido de "[]" y debe agregarse el atributo `len`, que contiene la cantidad de elementos del array. En ambos casos, entre el tag de apertura y el tag de cierre figura el nombre del mensaje.
+	* Cada `field` puede ser un campo de elemento único o un array. En caso de ser un elemento único, su atributo `type` lleva su tipo. En caso de ser un array; el atributo `type` lleva su tipo seguido de "[]" y debe agregarse el atributo `len`, que contiene la cantidad de elementos del array. En ambos casos, entre el tag de apertura y el tag de cierre figura el nombre del campo.
 * **Todos los nombres deben seguir las reglas léxicas de identificadores de C.**
 
 ## Uso del generador
