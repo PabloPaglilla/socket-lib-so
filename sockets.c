@@ -6,6 +6,9 @@
 #include <netdb.h>
 
 int get_local_addrinfo(const char* port, struct addrinfo* hints, struct addrinfo** server_info) {
+
+	// Wrapper para getaddrinfo cuando se busca la addrinfo propia
+
 	int ret;
 	if((ret = getaddrinfo(NULL, port, hints, server_info)) != 0) {
 		fprintf(stderr, "At getaddrinfo():\n\t%s\n", gai_strerror(ret));
@@ -15,6 +18,10 @@ int get_local_addrinfo(const char* port, struct addrinfo* hints, struct addrinfo
 }
 
 int get_socket(const struct addrinfo* addr) {
+
+	// Recibe un addrinfo y retorna el file descriptor de un socket
+	// asociado a ella
+
 	int socket_fd = socket(addr->ai_family,
 		addr->ai_socktype,
 		addr->ai_protocol);
@@ -25,6 +32,10 @@ int get_socket(const struct addrinfo* addr) {
 }
 
 int get_binded_socket(const struct addrinfo* possible_addrinfo) {
+
+	// Recibe un addr info e intenta crear un socket asociado
+	// a ella y después bindearlo
+
 	int socket_fd;
 
 	if((socket_fd = get_socket(possible_addrinfo)) == -1) {
@@ -42,6 +53,10 @@ int get_binded_socket(const struct addrinfo* possible_addrinfo) {
 }
 
 int get_connected_socket(const struct addrinfo* possible_addrinfo) {
+
+	// Recibe un addrinfo e intenta crear un socket asociado
+	// a ella y después conectarlo
+
 	int socket_fd;
 
 	if((socket_fd = get_socket(possible_addrinfo)) == -1) {
@@ -62,6 +77,13 @@ int get_connected_socket(const struct addrinfo* possible_addrinfo) {
 int loop_addrinfo_list(struct addrinfo* linked_list,
 		int (*get_socket) (const struct addrinfo*)) {
 
+	// Recibe una lista enlazada resultado de getaddrinfo y un puntero 
+	// a una función. La función debe tomar un addrinfo y devolver
+	// un socket o -1 si hubo un error.
+	// Retorna el primer socket que pueda obtenerse sin error
+	// a partir de un addrinfo de la lista enlazada. Si 
+	// no puede obtenerse ningun socket, informa el error y retorna -1.
+
 	struct addrinfo* p;
 	int socket_fd;
 
@@ -76,6 +98,11 @@ int loop_addrinfo_list(struct addrinfo* linked_list,
 }
 
 int create_socket_server(const char* port, int backlog) {
+
+	// Recibe un puerto y un backlog. Crea y devuelve el file descriptor
+	// de un socket TCP que escucha en ese puerto con dicho backlog. Retorna
+	// -1 en caso de error.
+
 	int socket_fd;
 	struct addrinfo hints, *server_info;
 
@@ -103,6 +130,10 @@ int create_socket_server(const char* port, int backlog) {
 }
 
 int create_socket_client(const char* host, const char* port) {
+
+	// Recibe un host y un puerto. Retorna un socket TCP conectado
+	// a la direccion host:puerto o -1 en caso de error.
+
 	int socket_fd;
 	struct addrinfo hints, *server_info;
 	int ret;
