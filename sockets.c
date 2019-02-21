@@ -10,6 +10,9 @@
 
 #include "sockets.h"
 
+#define MAX_EPOLL_EVENTS 10
+#define EPOLL_TIMEOUT 1000
+
 int get_local_addrinfo(const char* port, struct addrinfo* hints, struct addrinfo** server_info) {
 
 	// Wrapper para getaddrinfo cuando se busca la addrinfo propia
@@ -168,6 +171,22 @@ int run_handler(handler_t handler, int socket_fd) {
 	return -1;
 }
 
+void init_server_input(struct server_input* input,
+		int server_fd, struct handler_set handlers) {
+	pthread_mutex_init(&input->lock, NULL);
+	input->should_stop = 0;
+	input->server_fd = server_fd;
+	input->handlers = handlers;
+}
+
+int thread_should_stop(struct server_input* input) {
+	pthread_mutex_lock(&input->lock);
+	int stop = input->should_stop;
+	pthread_mutex_unlock(&input->lock);
+	printf("Should stop: %d\n", stop);
+	return stop;
+}
+
 struct clients_storage {
 	int* clients;
 	int numClients;
@@ -180,16 +199,6 @@ struct clients_storage init_clients_storage() {
 	storage.numClients = 0;
 	storage.maxClients = 0;
 	return storage;
-}
-
-#define MAX_EPOLL_EVENTS 10
-
-int thread_should_stop(struct server_mutex* mutex) {
-	pthread_mutex_lock(&mutex->lock);
-	int stop = mutex->shouldStop;
-	pthread_mutex_unlock(&mutex->lock);
-	printf("Should stop: %d\n", stop);
-	return stop;
 }
 
 int add_client(struct clients_storage* storage, int client) {
@@ -236,53 +245,74 @@ int add_epoll_fd(int epoll_fd, int socket_fd) {
 	return 0;
 }
 
-int remove_epoll_fd(int epoll_fd, int socket_fd) {
-	if(epoll_ctl(epoll_fd, EPOLL_CTL_DEL, socket_fd, NULL) == -1) {
-		fprintf(stderr, "Couldn't remove file descriptor to epoll. Errno: %d\n", errno);
-		return -1;
+void accept_new_client(int server_fd, int epoll_fd, 
+		struct clients_storage* storage, struct handler_set handlers) {
+
+	struct sockaddr_storage client_addr;
+	socklen_t sin_size = sizeof client_addr;
+	int new_client;
+
+	if((new_client = accept(server_fd, (struct sockaddr*) &client_addr, &sin_size)) == -1) {
+		fprintf(stderr, "Error accepting client. Errno: %d\n", errno);
+		return;
 	}
-	return 0;
+
+	switch(run_handler(handlers.on_new_client, new_client)) {
+		case CLOSE_CLIENT:
+			close(new_client);
+			break;
+		default:
+			if(add_epoll_fd(epoll_fd, new_client) == -1) {
+				// Si no se puede registrar el cliente en epoll,
+				// se cierra la conección
+				close(new_client);
+			} else {
+				add_client(storage, new_client);	
+			}
+	}
+}
+
+void handle_data_from_client(int client_fd, 
+		struct clients_storage* storage, struct handler_set handlers) {
+
+	switch(run_handler(handlers.on_can_read, client_fd)) {
+		case CLOSE_CLIENT:
+			remove_client(storage, client_fd);
+			// Cerrar el file descriptor lo remueve automáticamente
+			// de los descriptors registrados de epoll, no es necesario
+			// removerlos a mano.
+			close(client_fd);
+			break;
+	}
 }
 
 void* run_server(void * input) {
 
 	struct server_input* data = (struct server_input*) input;
+	int server_fd = data->server_fd;
+	struct handler_set handlers = data->handlers;
 	struct epoll_event events[MAX_EPOLL_EVENTS];
 	struct clients_storage storage = init_clients_storage();
-	struct sockaddr_storage client_addr;
-	socklen_t sin_size = sizeof client_addr;
-	int epoll_event_count;
-	int epoll_fd = epoll_create1(0);
+	int epoll_event_count, epoll_fd = epoll_create1(0);
 
 	if(epoll_fd == -1) {
 		fprintf(stderr, "Couldn't get epoll file descriptor. Errno: %d\n", errno);
 	}
 
-	if(add_epoll_fd(epoll_fd, data->server_fd) == -1) {
+	if(add_epoll_fd(epoll_fd, server_fd) == -1) {
 		close(epoll_fd);
-		return 0;
+		return NULL;
 	}
 
-	while(!thread_should_stop(&data->mutex)) {
+	while(!thread_should_stop(data)) {
 		epoll_event_count = epoll_wait(epoll_fd, events, 
-			MAX_EPOLL_EVENTS, 1000);
+			MAX_EPOLL_EVENTS, EPOLL_TIMEOUT);
 		for(int i = 0; i < epoll_event_count; i++) { 
 			int socket_fd = events[i].data.fd;
-			printf("Socket: %d\n", socket_fd);
-			if(socket_fd == data->server_fd) {
-				int new_client =  accept(socket_fd, (struct sockaddr*) &client_addr, &sin_size);
-				if(run_handler(data->handlers.on_new_client, new_client) == CLOSE_CLIENT) {
-					close(new_client);
-				} else {
-					add_client(&storage, new_client);
-					add_epoll_fd(epoll_fd, new_client);
-				}
+			if(socket_fd == server_fd) {
+				accept_new_client(server_fd, epoll_fd, &storage, handlers);
 			} else {
-				if(run_handler(data->handlers.on_can_read, socket_fd) == CLOSE_CLIENT) {
-					remove_client(&storage, socket_fd);
-					remove_epoll_fd(epoll_fd, socket_fd);
-					close(socket_fd);
-				}
+				handle_data_from_client(socket_fd, &storage, handlers);
 			}
 		}
 	}
