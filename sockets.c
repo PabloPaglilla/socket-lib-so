@@ -202,6 +202,12 @@ int thread_should_stop(struct server_input* input) {
 	return stop;
 }
 
+void stop_server(struct server_input* input) {
+	pthread_mutex_lock(&input->lock);
+	input->should_stop = 1;
+	pthread_mutex_unlock(&input->lock);
+}
+
 struct clients_storage {
 
 	// Estructura para almacenar dinámicamente los clientes
@@ -295,7 +301,9 @@ void accept_new_client(int server_fd, int epoll_fd,
 	// definido. Luego:
 	//				- Si el handler le indico retornando CLOSE_CLIENT,
 	// cierra la conexión del cliente.
-	//				- Si el handler no retorna CLOSE_CLIENT, intenta
+	//				- Si el handler retorna STOP_SERVER, se finalizará
+	// el thread del servidor.
+	//				- Si el handler retorna otra cosa, intenta
 	// agregar el cliente tanto a los clientes como al registro de
 	// epoll. En caso de error, cierra la conexión. 
 
@@ -315,6 +323,10 @@ void accept_new_client(int server_fd, int epoll_fd,
 	switch(ret) {
 		case CLOSE_CLIENT:
 			close(new_client);
+			break;
+		case STOP_SERVER:
+			close(new_client);
+			stop_server(input);
 			break;
 		default:
 			// Si hay algun error al intentar agregar el cliente
@@ -337,9 +349,10 @@ void handle_data_from_client(int client_fd,
 
 	// Se ejecuta cuando un file descriptor está listo para leer.
 	// Recibe dicho file descriptor, los clientes y el input del
-	// servidor. Ejecuta el handler correspondiente de existir y,
+	// servidor. Ejecuta el handler correspondiente de existir y;
 	// si este lo indica retornando CLOSE_CLIENT, cierra la conexión
-	// y remueve al cliente de los registros.
+	// y remueve al cliente de los registros; si retorna STOP_SERVER,
+	// se finalizará el thread del servidor.
 
 	pthread_mutex_lock(&input->lock);
 	int ret = run_handler(input->handlers.on_can_read, client_fd, input->shared_data);
@@ -352,6 +365,9 @@ void handle_data_from_client(int client_fd,
 			// de los descriptors registrados de epoll, no es necesario
 			// removerlos a mano.
 			close(client_fd);
+			break;
+		case STOP_SERVER:
+			stop_server(input);
 			break;
 	}
 }
@@ -385,7 +401,7 @@ void* run_server(void * data) {
 		return NULL;
 	}
 
-	while(!thread_should_stop(data)) {
+	while(!thread_should_stop(input)) {
 		epoll_event_count = epoll_wait(epoll_fd, events, 
 			MAX_EPOLL_EVENTS, EPOLL_TIMEOUT);
 		for(int i = 0; i < epoll_event_count; i++) { 
@@ -421,8 +437,6 @@ void stop_server_and_join(pthread_t server_thread, struct server_input* input) {
 	// Recibe un thread inicializado con start_server() y el input del servidor
 	// asociado. Finaliza el servidor y ejecuta pthread_join() en el thread.
 
-	pthread_mutex_lock(&input->lock);
-	input->should_stop = 1;
-	pthread_mutex_unlock(&input->lock);
+	stop_server(input);
 	pthread_join(server_thread, NULL);
 }

@@ -9,7 +9,7 @@ typedef int (*handler_t)(int, void*);
 
 // Retornos de los handlers, los cuales serán interpretados por el
 // servidor.
-enum handler_return { CLOSE_CLIENT = 10 };
+enum handler_return { CLOSE_CLIENT = 10, STOP_SERVER };
 
 // Estructura que define los handlers que utilizará un servidor.
 // on_new_client será llamada cuando se produzca una nueva conexión,
@@ -42,6 +42,8 @@ int create_socket_server(const char*, int);
 int create_socket_client(const char*, const char *);
 
 void init_server_input(struct server_input*, int, struct handler_set, void*);
+
+void stop_server(struct server_input*);
 
 int start_server(pthread_t*, struct server_input*);
 
