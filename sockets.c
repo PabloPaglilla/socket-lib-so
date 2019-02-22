@@ -386,8 +386,12 @@ void* run_server(void * data) {
 	// file descriptor asociado a la instancia de epoll, y retorna. 
 
 	struct server_input* input = (struct server_input*) data;
+
+	pthread_mutex_lock(&input->lock);
 	int server_fd = input->server_fd;
 	struct handler_set handlers = input->handlers;
+	pthread_mutex_unlock(&input->lock);
+
 	struct epoll_event events[MAX_EPOLL_EVENTS];
 	struct clients_storage cliets = init_clients_storage();
 	int epoll_event_count, epoll_fd = epoll_create1(0);
