@@ -25,7 +25,7 @@ int create_socket_client(const char*, const char *);
 
 void init_server_input(struct server_input*, int, struct handler_set);
 
-void* run_server(void*);
+int start_server(pthread_t*, struct server_input*);
 
 void stop_server_and_join(pthread_t, struct server_input*);
 

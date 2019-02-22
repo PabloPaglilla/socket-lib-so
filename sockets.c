@@ -326,6 +326,15 @@ void* run_server(void * input) {
 	close(epoll_fd);
 }
 
+int start_server(pthread_t* thread, struct server_input* input) {
+	int ret;
+	if((ret = pthread_create(thread, NULL, &run_server, input)) != 0) {
+		fprintf(stderr, "Couldn't start server thread, error at pthread_create(). Error code: %d\n", ret);
+		return -1;
+	}
+	return 0;
+}
+
 void stop_server_and_join(pthread_t server_thread, struct server_input* input) {
 	pthread_mutex_lock(&input->lock);
 	input->should_stop = 1;
