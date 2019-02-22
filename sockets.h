@@ -3,7 +3,7 @@
 
 #include <pthread.h>
 
-typedef int (*handler_t)(int);
+typedef int (*handler_t)(int, void*);
 
 enum handler_return { CLOSE_CLIENT = 10 };
 
@@ -17,13 +17,14 @@ struct server_input {
 	int should_stop;
 	int server_fd;
 	struct handler_set handlers;
+	void* shared_data;
 };
 
 int create_socket_server(const char*, int);
 
 int create_socket_client(const char*, const char *);
 
-void init_server_input(struct server_input*, int, struct handler_set);
+void init_server_input(struct server_input*, int, struct handler_set, void*);
 
 int start_server(pthread_t*, struct server_input*);
 

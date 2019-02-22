@@ -164,19 +164,21 @@ int create_socket_client(const char* host, const char* port) {
 	return socket_fd;
 }
 
-int run_handler(handler_t handler, int socket_fd) {
+int run_handler(handler_t handler, int socket_fd, void* shared_data) {
 	if(handler != NULL) {
-		return handler(socket_fd);
+		return handler(socket_fd, shared_data);
 	}
 	return 0;
 }
 
 void init_server_input(struct server_input* input,
-		int server_fd, struct handler_set handlers) {
+		int server_fd, struct handler_set handlers,
+		void* shared_data) {
 	pthread_mutex_init(&input->lock, NULL);
 	input->should_stop = 0;
 	input->server_fd = server_fd;
 	input->handlers = handlers;
+	input->shared_data = shared_data;
 }
 
 int thread_should_stop(struct server_input* input) {
@@ -246,18 +248,22 @@ int add_epoll_fd(int epoll_fd, int socket_fd) {
 }
 
 void accept_new_client(int server_fd, int epoll_fd, 
-		struct clients_storage* clients, struct handler_set handlers) {
+		struct clients_storage* clients, struct server_input* input) {
 
 	struct sockaddr_storage client_addr;
 	socklen_t sin_size = sizeof client_addr;
-	int new_client;
+	int new_client, ret;
 
 	if((new_client = accept(server_fd, (struct sockaddr*) &client_addr, &sin_size)) == -1) {
 		fprintf(stderr, "Error accepting client. Errno: %d\n", errno);
 		return;
 	}
 
-	switch(run_handler(handlers.on_new_client, new_client)) {
+	pthread_mutex_lock(&input->lock);
+	ret = run_handler(input->handlers.on_new_client, new_client, input->shared_data);
+	pthread_mutex_unlock(&input->lock);
+
+	switch(ret) {
 		case CLOSE_CLIENT:
 			close(new_client);
 			break;
@@ -278,9 +284,13 @@ void accept_new_client(int server_fd, int epoll_fd,
 }
 
 void handle_data_from_client(int client_fd, 
-		struct clients_storage* cliets, struct handler_set handlers) {
+		struct clients_storage* cliets, struct server_input* input) {
 
-	switch(run_handler(handlers.on_can_read, client_fd)) {
+	pthread_mutex_lock(&input->lock);
+	int ret = run_handler(input->handlers.on_can_read, client_fd, input->shared_data);
+	pthread_mutex_unlock(&input->lock);
+
+	switch(ret) {
 		case CLOSE_CLIENT:
 			remove_client(cliets, client_fd);
 			// Cerrar el file descriptor lo remueve automáticamente
@@ -315,9 +325,9 @@ void* run_server(void * input) {
 		for(int i = 0; i < epoll_event_count; i++) { 
 			int socket_fd = events[i].data.fd;
 			if(socket_fd == server_fd) {
-				accept_new_client(server_fd, epoll_fd, &cliets, handlers);
+				accept_new_client(server_fd, epoll_fd, &cliets, data);
 			} else {
-				handle_data_from_client(socket_fd, &cliets, handlers);
+				handle_data_from_client(socket_fd, &cliets, data);
 			}
 		}
 	}
