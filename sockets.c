@@ -325,3 +325,10 @@ void* run_server(void * input) {
 	clear_clients(cliets);
 	close(epoll_fd);
 }
+
+void stop_server_and_join(pthread_t server_thread, struct server_input* input) {
+	pthread_mutex_lock(&input->lock);
+	input->should_stop = 1;
+	pthread_mutex_unlock(&input->lock);
+	pthread_join(server_thread, NULL);
+}

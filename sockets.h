@@ -1,6 +1,8 @@
 #ifndef SOCKETS_H_INCLUDED
 #define SOCKETS_H_INCLUDED
 
+#include <pthread.h>
+
 typedef int (*handler_t)(int);
 
 enum handler_return { CLOSE_CLIENT = 10 };
@@ -24,5 +26,7 @@ int create_socket_client(const char*, const char *);
 void init_server_input(struct server_input*, int, struct handler_set);
 
 void* run_server(void*);
+
+void stop_server_and_join(pthread_t, struct server_input*);
 
 #endif
