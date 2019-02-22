@@ -168,7 +168,7 @@ int run_handler(handler_t handler, int socket_fd) {
 	if(handler != NULL) {
 		return handler(socket_fd);
 	}
-	return -1;
+	return 0;
 }
 
 void init_server_input(struct server_input* input,
@@ -183,55 +183,55 @@ int thread_should_stop(struct server_input* input) {
 	pthread_mutex_lock(&input->lock);
 	int stop = input->should_stop;
 	pthread_mutex_unlock(&input->lock);
-	printf("Should stop: %d\n", stop);
 	return stop;
 }
 
 struct clients_storage {
-	int* clients;
+	int* clients_buff;
 	int numClients;
 	int maxClients;
 };
 
 struct clients_storage init_clients_storage() {
-	struct clients_storage storage;
-	storage.clients = NULL;
-	storage.numClients = 0;
-	storage.maxClients = 0;
-	return storage;
+	struct clients_storage clients;
+	clients.clients_buff = malloc((sizeof(int)) * 2);
+	clients.numClients = 0;
+	clients.maxClients = 2;
+	return clients;
 }
 
-int add_client(struct clients_storage* storage, int client) {
-	if(!(storage->numClients < storage->maxClients)) {
-		int* new_buf = realloc(storage->clients, storage->maxClients * 2);
+int add_client(struct clients_storage* clients, int client) {
+	if(!(clients->numClients < clients->maxClients)) {
+		int* new_buf = realloc(clients->clients_buff, clients->maxClients * 2);
 		if (new_buf == NULL) {
+			fprintf(stderr, "Couldn't allocate memory for clients.");
 			return -1;
 		}
-		storage->clients = new_buf;
-		storage->maxClients *= 2;
+		clients->clients_buff = new_buf;
+		clients->maxClients *= 2;
 	}
-	storage->clients[storage->numClients] = client;
-	storage->numClients++;
+	clients->clients_buff[clients->numClients] = client;
+	clients->numClients++;
 	return 0;
 }
 
-void remove_client(struct clients_storage* storage, int client) {
-	for(int i = 0; i < storage->numClients; i++) {
-		if(client == storage->clients[i]) {
-			for(int j = i + 1; j < storage->numClients; j++) {
-				storage->clients[j - 1] = storage->clients[j];
+void remove_client(struct clients_storage* clients, int client) {
+	for(int i = 0; i < clients->numClients; i++) {
+		if(client == clients->clients_buff[i]) {
+			for(int j = i + 1; j < clients->numClients; j++) {
+				clients->clients_buff[j - 1] = clients->clients_buff[j];
 			}
+			clients->numClients--;
 			break;
 		}
 	}
-	storage->numClients--;
 }
 
-void clear_clients(struct clients_storage storage) {
-	for(int i = 0; i < storage.numClients; i++) {
-		close(storage.clients[i]);
+void clear_clients(struct clients_storage cliets) {
+	for(int i = 0; i < cliets.numClients; i++) {
+		close(cliets.clients_buff[i]);
 	}
-	free(storage.clients);
+	free(cliets.clients_buff);
 }
 
 int add_epoll_fd(int epoll_fd, int socket_fd) {
@@ -246,7 +246,7 @@ int add_epoll_fd(int epoll_fd, int socket_fd) {
 }
 
 void accept_new_client(int server_fd, int epoll_fd, 
-		struct clients_storage* storage, struct handler_set handlers) {
+		struct clients_storage* clients, struct handler_set handlers) {
 
 	struct sockaddr_storage client_addr;
 	socklen_t sin_size = sizeof client_addr;
@@ -262,22 +262,27 @@ void accept_new_client(int server_fd, int epoll_fd,
 			close(new_client);
 			break;
 		default:
-			if(add_epoll_fd(epoll_fd, new_client) == -1) {
-				// Si no se puede registrar el cliente en epoll,
-				// se cierra la conección
+			// Si hay algun error al intentar agregar el cliente
+			// a la lista de clientes o al registrar el file 
+			// descriptor a epoll, cerramos la conexión.
+			if(add_client(clients, new_client) == -1) {
 				close(new_client);
-			} else {
-				add_client(storage, new_client);	
+				return;
+			}
+			if(add_epoll_fd(epoll_fd, new_client) == -1) {
+				close(new_client);
+				remove_client(clients, new_client);
+				return;
 			}
 	}
 }
 
 void handle_data_from_client(int client_fd, 
-		struct clients_storage* storage, struct handler_set handlers) {
+		struct clients_storage* cliets, struct handler_set handlers) {
 
 	switch(run_handler(handlers.on_can_read, client_fd)) {
 		case CLOSE_CLIENT:
-			remove_client(storage, client_fd);
+			remove_client(cliets, client_fd);
 			// Cerrar el file descriptor lo remueve automáticamente
 			// de los descriptors registrados de epoll, no es necesario
 			// removerlos a mano.
@@ -292,7 +297,7 @@ void* run_server(void * input) {
 	int server_fd = data->server_fd;
 	struct handler_set handlers = data->handlers;
 	struct epoll_event events[MAX_EPOLL_EVENTS];
-	struct clients_storage storage = init_clients_storage();
+	struct clients_storage cliets = init_clients_storage();
 	int epoll_event_count, epoll_fd = epoll_create1(0);
 
 	if(epoll_fd == -1) {
@@ -310,13 +315,13 @@ void* run_server(void * input) {
 		for(int i = 0; i < epoll_event_count; i++) { 
 			int socket_fd = events[i].data.fd;
 			if(socket_fd == server_fd) {
-				accept_new_client(server_fd, epoll_fd, &storage, handlers);
+				accept_new_client(server_fd, epoll_fd, &cliets, handlers);
 			} else {
-				handle_data_from_client(socket_fd, &storage, handlers);
+				handle_data_from_client(socket_fd, &cliets, handlers);
 			}
 		}
 	}
 
-	clear_clients(storage);
+	clear_clients(cliets);
 	close(epoll_fd);
 }
