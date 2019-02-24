@@ -96,7 +96,7 @@ Esta estructura es uno de los datos que recibirá el servidor. Contiene los dos 
 
 Cuando un cliente cierre la conexión se registrará que está listo para lectura, pero `recv()` retornará 0. Si bien
 esto indica que el cliente cerró la conexión, el servidor no maneja automáticamente la situación y cierra el socket.
-Es por eso que `on_can_read()` debe retornar `CLOSE_CIENT` cuando esto sucede.
+Es por eso que `on_can_read()` debe retornar `CLOSE_CLIENT` cuando esto sucede.
 
 #### Concepto previo: la estructura `server_input`
 
@@ -131,7 +131,8 @@ los parámetros recibidos a los campos correspondientes, inicializa `should_stop
 **Nota**
 
 Luego de instanciado el servidor, si bien se utliza el flag `should_stop` para finalizarlo y los datos compartidos pueden
-ser modificados tanto por los handlers como por otro thread, este no registrará cambios en `server_fd` ni en `handlers`.
+ser modificados tanto por los handlers como por otro thread, este no registrará cambios en `server_fd`. Los handlers pueden ser modificados
+mientras el servidor está ejecutandose.
 
 #### Los datos compartidos
 
@@ -250,6 +251,8 @@ int main() {
   stop_server_and_join(server_thread, &input);
   
   printf("Cantidad de handlers ejecutados mientras corría el servidor: %d\n", cantidad_de_handlers_ejecutados);
+
+  close(server_fd);
   
   return 0;
 }

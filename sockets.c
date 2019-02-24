@@ -34,7 +34,7 @@ int get_socket(const struct addrinfo* addr) {
 		addr->ai_socktype,
 		addr->ai_protocol);
 	if (socket_fd == -1) {
-		fprintf(stderr, "Error at socket(). Errno: %d", errno);
+		fprintf(stderr, "Error at socket(). Errno: %d\n", errno);
 	}
 	return socket_fd;
 }
@@ -53,7 +53,7 @@ int get_binded_socket(const struct addrinfo* possible_addrinfo) {
 	if(bind(socket_fd, possible_addrinfo->ai_addr,
 			possible_addrinfo->ai_addrlen) == -1) {
 		close(socket_fd);
-		fprintf(stderr, "Error at bind(). Errno: %d", errno);
+		fprintf(stderr, "Error at bind(). Errno: %d\n", errno);
 		return -1;
 	}
 
@@ -75,7 +75,7 @@ int get_connected_socket(const struct addrinfo* possible_addrinfo) {
 			possible_addrinfo->ai_addr, 
 			possible_addrinfo->ai_addrlen) == -1) {
 		close(socket_fd);
-		fprintf(stderr, "Error at connect(). Errno: %d", errno);
+		fprintf(stderr, "Error at connect(). Errno: %d\n", errno);
 		return -1;
 	}
 
@@ -101,7 +101,7 @@ int loop_addrinfo_list(struct addrinfo* linked_list,
 		}
 	}
 
-	fprintf(stderr, "Couldn't find valid address for host.");
+	fprintf(stderr, "Couldn't find valid address for host.\n");
 	return -1;
 }
 
@@ -130,7 +130,7 @@ int create_socket_server(const char* port, int backlog) {
 	freeaddrinfo(server_info);
 
 	if(listen(socket_fd, backlog) == -1) {
-		fprintf(stderr, "Error at listen(). Errno: %d", errno);
+		fprintf(stderr, "Error at listen(). Errno: %d\n", errno);
 		return -1;
 	}
 
@@ -214,8 +214,8 @@ struct clients_storage {
 	// del servidor.
 
 	int* clients_buff;
-	int numClients;
-	int maxClients;
+	int num_clients;
+	int max_clients;
 };
 
 struct clients_storage init_clients_storage() {
@@ -224,8 +224,8 @@ struct clients_storage init_clients_storage() {
 
 	struct clients_storage clients;
 	clients.clients_buff = malloc((sizeof(int)) * 2);
-	clients.numClients = 0;
-	clients.maxClients = 2;
+	clients.num_clients = 0;
+	clients.max_clients = 2;
 	return clients;
 }
 
@@ -234,17 +234,17 @@ int add_client(struct clients_storage* clients, int client) {
 	// Agrega el cliente client a la estructura clients_storate clients.
 	// De ser necesario, aumenta el tamaño del buffer de la estructura.
 
-	if(!(clients->numClients < clients->maxClients)) {
-		int* new_buf = realloc(clients->clients_buff, clients->maxClients * 2);
+	if(!(clients->num_clients < clients->max_clients)) {
+		int* new_buf = realloc(clients->clients_buff, clients->max_clients * 2);
 		if (new_buf == NULL) {
-			fprintf(stderr, "Couldn't allocate memory for clients.");
+			fprintf(stderr, "Couldn't allocate memory for clients.\n");
 			return -1;
 		}
 		clients->clients_buff = new_buf;
-		clients->maxClients *= 2;
+		clients->max_clients *= 2;
 	}
-	clients->clients_buff[clients->numClients] = client;
-	clients->numClients++;
+	clients->clients_buff[clients->num_clients] = client;
+	clients->num_clients++;
 	return 0;
 }
 
@@ -252,12 +252,12 @@ void remove_client(struct clients_storage* clients, int client) {
 
 	// Remueve el cliente client a la estructura clients_storate clients.
 
-	for(int i = 0; i < clients->numClients; i++) {
+	for(int i = 0; i < clients->num_clients; i++) {
 		if(client == clients->clients_buff[i]) {
-			for(int j = i + 1; j < clients->numClients; j++) {
+			for(int j = i + 1; j < clients->num_clients; j++) {
 				clients->clients_buff[j - 1] = clients->clients_buff[j];
 			}
-			clients->numClients--;
+			clients->num_clients--;
 			break;
 		}
 	}
@@ -268,7 +268,7 @@ void clear_clients(struct clients_storage cliets) {
 	// Recibe una estructura clients_storage. Cierra todas sus conexiones
 	// y libera el buffer de clientes.
 
-	for(int i = 0; i < cliets.numClients; i++) {
+	for(int i = 0; i < cliets.num_clients; i++) {
 		close(cliets.clients_buff[i]);
 	}
 	free(cliets.clients_buff);
@@ -388,8 +388,7 @@ void* run_server(void * data) {
 	struct server_input* input = (struct server_input*) data;
 
 	pthread_mutex_lock(&input->lock);
-	int server_fd = input->server_fd;
-	struct handler_set handlers = input->handlers;
+	int server_fd = input->server_fd;;
 	pthread_mutex_unlock(&input->lock);
 
 	struct epoll_event events[MAX_EPOLL_EVENTS];
