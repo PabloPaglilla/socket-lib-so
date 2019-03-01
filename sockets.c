@@ -130,6 +130,7 @@ int create_socket_server(const char* port, int backlog) {
 	freeaddrinfo(server_info);
 
 	if(listen(socket_fd, backlog) == -1) {
+		close(socket_fd);
 		fprintf(stderr, "Error at listen(). Errno: %d\n", errno);
 		return -1;
 	}
