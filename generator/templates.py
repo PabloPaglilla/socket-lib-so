@@ -5,6 +5,8 @@ header_includes = """#include <stdint.h>
 source_includes = """#include <stdint.h>
 #include <string.h>
 #include <netinet/in.h>
+#include <sys/types.h>
+#include <sys/socket.h>
 #include "{header_name}"
 """
 
@@ -24,7 +26,9 @@ typedef void (*decoder_t)(void*);
 
 int decode(void*, void*);
 
-int pack_msg(uint8_t, uint8_t, void*, uint8_t*);"""
+int pack_msg(uint8_t, uint8_t, void*, uint8_t*);
+
+int recv_msg(int, void*, int);"""
 
 message_defines_template = """
 #define {msg_name_upper}_ID 0
@@ -95,8 +99,8 @@ int decode(void *data, void *buff) {{
 
 	uint8_t* byte_data = (uint8_t*) data;
 
-	int msg_id = byte_data[1];
-	uint8_t* msg_body = byte_data + 2;
+	int msg_id = byte_data[0];
+	uint8_t* msg_body = byte_data + 1;
 	int body_size;
 
 	// Puntero a la función que decodifica
@@ -123,6 +127,31 @@ int pack_msg(uint8_t msg_id, uint8_t body_size, void *msg_body, uint8_t *buff) {
 	buff[1] = msg_id;
 	memcpy(buff + 2, msg_body, body_size);
 	return msg_size + 1;
+}}
+
+int recv_msg(int socket_fd, void* buffer, int max_size) {{
+	uint8_t* byte_buffer = (uint8_t *)buffer;
+	int bytes_rcvd = 0, num_bytes, msg_size;
+
+	num_bytes = recv(socket_fd, byte_buffer, 1, 0);
+	if(num_bytes < 1) {{
+		return num_bytes;
+	}}
+	msg_size = byte_buffer[0];
+	if(max_size < msg_size - 1) {{
+		return -2;
+	}}
+
+	uint8_t local_buffer[msg_size];
+	while(bytes_rcvd < msg_size) {{
+		num_bytes = recv(socket_fd, local_buffer + bytes_rcvd, msg_size - bytes_rcvd, 0);
+		if(num_bytes < 1) {{
+			return num_bytes;
+		}}
+		bytes_rcvd += num_bytes;
+	}}
+
+	return decode(local_buffer, byte_buffer);
 }}
 """
 
