@@ -118,6 +118,7 @@ def generate_header(root, header):
 
 	header.write(templates.header_includes)
 	header.write(templates.header_defines)
+	header.write(templates.errors_enum)
 	generate_enum_definitions(header, root)
 	for message in root.iter('message'):
 		generate_msg_defines(header, message)

@@ -17,6 +17,10 @@ header_defines = """
 
 header_close = "\n#endif"
 
+errors_enum = """enum errors { SOCKET_ERROR = -1, UNKNOWN_ID = -10, 
+	BUFFER_TOO_SMALL, MESSAGE_TOO_BIG, CONN_CLOSED };
+"""
+
 enum_definition = """enum {enum_name} {{ {values} }};
 """
 
@@ -116,7 +120,7 @@ int decode(void *data, void *buff) {{
 
 	switch(msg_id) {{{switch_cases}
 		default:
-			return -1;
+			return UNKNOWN_ID;
 	}}
 
 	memcpy(buff, msg_body, body_size);
@@ -129,7 +133,7 @@ int decode(void *data, void *buff) {{
 int pack_msg(uint8_t msg_id, uint8_t body_size, void *msg_body, uint8_t *buff) {{
 	int msg_size = body_size + sizeof(msg_id);
 	if(msg_size > 255) {{
-		return -1;
+		return MESSAGE_TOO_BIG;
 	}}
 	buff[0] = (uint8_t) msg_size;
 	buff[1] = msg_id;
@@ -142,19 +146,23 @@ int recv_msg(int socket_fd, void* buffer, int max_size) {{
 	int bytes_rcvd = 0, num_bytes, msg_size;
 
 	num_bytes = recv(socket_fd, byte_buffer, 1, 0);
-	if(num_bytes < 1) {{
-		return num_bytes;
+	if(num_bytes == 0) {{
+		return CONN_CLOSED;
+	}} else if(num_bytes == -1) {{
+		return SOCKET_ERROR;
 	}}
 	msg_size = byte_buffer[0];
 	if(max_size < msg_size - 1) {{
-		return -2;
+		return BUFFER_TOO_SMALL;
 	}}
 
 	uint8_t local_buffer[msg_size];
 	while(bytes_rcvd < msg_size) {{
 		num_bytes = recv(socket_fd, local_buffer + bytes_rcvd, msg_size - bytes_rcvd, 0);
-		if(num_bytes < 1) {{
-			return num_bytes;
+		if(num_bytes == 0) {{
+			return CONN_CLOSED;
+		}} else if(num_bytes == -1) {{
+			return SOCKET_ERROR;
 		}}
 		bytes_rcvd += num_bytes;
 	}}
@@ -167,7 +175,7 @@ int send_full_msg(int socket_fd, uint8_t* buffer, int bytes_to_send) {{
 	while(bytes_to_send > bytes_sent) {{
 		num_bytes = send(socket_fd, buffer + bytes_sent, bytes_to_send - bytes_sent, 0);
 		if(num_bytes < 1) {{
-			return num_bytes;
+			return SOCKET_ERROR;
 		}}
 		bytes_sent += num_bytes;
 	}}
