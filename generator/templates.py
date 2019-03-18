@@ -27,7 +27,9 @@ int decode(void*, void*);
 
 int pack_msg(uint8_t, uint8_t, void*, uint8_t*);
 
-int recv_msg(int, void*, int);"""
+int recv_msg(int, void*, int);
+
+int send_full_msg(int, uint8_t*, int);"""
 
 message_defines_template = """
 #define {msg_name_upper}_ID 0
@@ -74,15 +76,7 @@ int pack_{msg_name}({create_parameters}, uint8_t *buff) {{
 int send_{msg_name}({create_parameters}, int socket_fd) {{
 	uint8_t local_buffer[{msg_name_upper}_SIZE + 2];
 	int bytes_to_send = pack_{msg_name}({parameter_pass}, local_buffer);
-	int num_bytes, bytes_sent = 0;
-	while(bytes_to_send > bytes_sent) {{
-		num_bytes = send(socket_fd, local_buffer + bytes_sent, bytes_to_send - bytes_sent, 0);
-		if(num_bytes < 1) {{
-			return num_bytes;
-		}}
-		bytes_sent += num_bytes;
-	}}
-	return bytes_sent;
+	return send_full_msg(socket_fd, local_buffer, bytes_to_send);
 }}
 """
 
@@ -166,6 +160,18 @@ int recv_msg(int socket_fd, void* buffer, int max_size) {{
 	}}
 
 	return decode(local_buffer, byte_buffer);
+}}
+
+int send_full_msg(int socket_fd, uint8_t* buffer, int bytes_to_send) {{
+	int num_bytes, bytes_sent = 0;
+	while(bytes_to_send > bytes_sent) {{
+		num_bytes = send(socket_fd, buffer + bytes_sent, bytes_to_send - bytes_sent, 0);
+		if(num_bytes < 1) {{
+			return num_bytes;
+		}}
+		bytes_sent += num_bytes;
+	}}
+	return bytes_sent;
 }}
 """
 
