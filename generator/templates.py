@@ -5,7 +5,6 @@ header_includes = """#include <stdint.h>
 source_includes = """#include <stdint.h>
 #include <string.h>
 #include <netinet/in.h>
-#include <sys/types.h>
 #include <sys/socket.h>
 #include "{header_name}"
 """
@@ -47,6 +46,7 @@ void decode_{msg_name} (void *);
 void encode_{msg_name} (struct {msg_name} *);
 struct {msg_name} create_{msg_name}({create_parameters});
 int pack_{msg_name}({create_parameters}, uint8_t *buff);
+int send_{msg_name}({create_parameters}, int socket_fd);
 """
 
 message_functions_template = """
@@ -69,6 +69,20 @@ int pack_{msg_name}({create_parameters}, uint8_t *buff) {{
 	struct {msg_name} p = create_{msg_name}({parameter_pass});
 	encode_{msg_name}(&p);
 	return pack_msg({msg_name_upper}_ID, {msg_name_upper}_SIZE, &p, buff);
+}}
+
+int send_{msg_name}({create_parameters}, int socket_fd) {{
+	uint8_t local_buffer[{msg_name_upper}_SIZE + 2];
+	int bytes_to_send = pack_{msg_name}({parameter_pass}, local_buffer);
+	int num_bytes, bytes_sent = 0;
+	while(bytes_to_send > bytes_sent) {{
+		num_bytes = send(socket_fd, local_buffer + bytes_sent, bytes_to_send - bytes_sent, 0);
+		if(num_bytes < 1) {{
+			return num_bytes;
+		}}
+		bytes_sent += num_bytes;
+	}}
+	return bytes_sent;
 }}
 """
 
