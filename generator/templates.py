@@ -62,7 +62,7 @@ struct {msg_name} create_{msg_name}({create_parameters}) {{
 }}
 
 int pack_{msg_name}({create_parameters}, uint8_t *buff) {{
-	struct {msg_name} p = create_test_msg({parameter_pass});
+	struct {msg_name} p = create_{msg_name}({parameter_pass});
 	encode_{msg_name}(&p);
 	return pack_msg({msg_name_upper}_ID, {msg_name_upper}_SIZE, &p, buff);
 }}
