@@ -15,7 +15,10 @@ header_defines = """
 
 """
 
-header_close = "\n#endif"
+header_close = """
+#define MAX_MSG_SIZE {max_msg_size}
+
+#endif"""
 
 errors_enum = """enum errors { SOCKET_ERROR = -1, UNKNOWN_ID = -10, 
 	BUFFER_TOO_SMALL, MESSAGE_TOO_BIG, CONN_CLOSED };
@@ -142,6 +145,9 @@ int pack_msg(uint8_t msg_id, uint8_t body_size, void *msg_body, uint8_t *buff) {
 }}
 
 int recv_msg(int socket_fd, void* buffer, int max_size) {{
+	if(max_size < MAX_MSG_SIZE) {{
+		return BUFFER_TOO_SMALL;
+	}}
 	uint8_t* byte_buffer = (uint8_t *)buffer;
 	int bytes_rcvd = 0, num_bytes, msg_size;
 
@@ -152,9 +158,6 @@ int recv_msg(int socket_fd, void* buffer, int max_size) {{
 		return SOCKET_ERROR;
 	}}
 	msg_size = byte_buffer[0];
-	if(max_size < msg_size - 1) {{
-		return BUFFER_TOO_SMALL;
-	}}
 
 	uint8_t local_buffer[msg_size];
 	while(bytes_rcvd < msg_size) {{

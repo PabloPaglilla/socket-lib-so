@@ -116,16 +116,20 @@ def generate_header(root, header):
 		-root: el elemento root del archivo xml
 		-header: el objeto archivo al que escribir"""
 
+	max_msg_size = 0
 	header.write(templates.header_includes)
 	header.write(templates.header_defines)
 	header.write(templates.errors_enum)
 	generate_enum_definitions(header, root)
 	for message in root.iter('message'):
+		msg_size = get_message_size(message)
+		if msg_size > max_msg_size:
+			max_msg_size = msg_size
 		generate_msg_defines(header, message)
 		generate_struct(header, message)
 		generate_signatures(header, message)
 	header.write(templates.msg_handling_functions_declarations)
-	header.write(templates.header_close)
+	header.write(templates.header_close.format(max_msg_size=max_msg_size))
 
 def generate_enum_definitions(file, root):
 
