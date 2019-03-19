@@ -7,6 +7,8 @@ source_includes = """#include <stdint.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include "{header_name}"
+
+int send_full_msg(int, uint8_t*, int);
 """
 
 header_defines = """
@@ -34,9 +36,7 @@ int decode(void*, void*);
 
 int pack_msg(uint8_t, uint8_t, void*, uint8_t*);
 
-int recv_msg(int, void*, int);
-
-int send_full_msg(int, uint8_t*, int);"""
+int recv_msg(int, void*, int);"""
 
 message_defines_template = """
 #define {msg_name_upper}_ID 0
