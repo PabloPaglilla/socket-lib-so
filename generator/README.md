@@ -18,10 +18,11 @@ La herramienta genera dos archivos:
 	* La definición de 3 constantes de preprocesador que representan el nombre del mensaje, tu identificador y su tamaño.
 	* Las declaraciones de las funciones implementadas en el fuente.
 * Un archivo fuente que define:
-	* Funciones para crear, codificar para enviar por la red, decodificar y empaquetar cada mensaje.
-	* Una función para decodificar un mensaje.
+	* Funciones para crear, codificar a network byte order, decodificar, empaquetar y enviar cada mensaje.
+	* Una función para decodificar un mensaje cualquiera.
 	* Una función para empaquetar cualquier mensaje, la cual
 	es usada por todas las funciones que empaquetan un mensaje particular.
+	* Una función para recibir un mensaje cualquiera.
 
 ## Mensajes
 
@@ -82,6 +83,18 @@ Donde:
 
 ## Uso del protocolo generado
 
+### Errores
+
+El protocolo define una enumeración de errores, la cual contiene:
+
+* SOCKET_ERROR: retornado cuando se produjo un error relacionado a la comunicación por sockets. Errno se encontrará seteada al error correspondiente.
+* UNKOWN_ID: retornada al intentar decodificar un mensaje cuyo identificador no pertenece al de ninguno definido.
+* BUFFER_TOO_SMALL: retornado al intentar recibir un mensaje pero brindando un buffer que puede no tener el tamaño suficiente. Este debe tener al menos el tamaño del mensaje más grande.
+* MESSAGE_TOO_BIG: retornado al intentar empaquetar un mensaje cuyo tamaño supera el permitido.
+* CONN_CLOSED: retornado al intentar recibir un mensaje cuando la conexión fue cerrada por la otra parte.
+
+### API
+
 El protocolo define las siguientes funciones:
 
 ``` C
@@ -89,7 +102,7 @@ El protocolo define las siguientes funciones:
 // Determina el tipo de mensaje, lo decodifica, escribe
 // la estructura correspondiente al mensaje al buffer buff
 // y retorna el id del mensaje.
-// Retorna -1 si no se reconoció el tipo del mensaje.
+// Retorna UNKOWN_ID si no se reconoció el identificador del mensaje.
 int decode(void *data, void *buff);
 
 // Toma el id del mensaje, su tamaño, un buffer conteniendo la
@@ -97,8 +110,22 @@ int decode(void *data, void *buff);
 // mensaje y lo escribe en el buffer. Retorna la cantidad
 // de bytes escritos. El buffer debe tener al menos body_size + 2
 // de memoria disponible.
-// Retorna -1 si el tamaño del cuerpo del mensaje supera 254.
+// Retorna MESSAGE_TOO_BIG si el tamaño del cuerpo del mensaje supera 254.
 int pack_msg(uint8_t msg_id, uint8_t body_size, void *msg_body, uint8_t *buff);
+
+// Toma un socket, un buffer y el tamaño máximo de este.
+// Recibe un mensaje del protocolo del socket, lo decodifica
+// y lo almacena en el buffer. Retorna el identificador del
+// mensaje recibido.
+// Si el buffer no alcanza el tamaño del mensaje más grande del
+// protocolo, retorna BUFFER_TOO_SMALL.
+// Si la conexión del socket fue cerrada por la otra parte,
+// retorna CONN_CLOSED.
+// Si se produce un error de comunicación, retorna SOCKET_ERROR
+// y errno se encontrará seteada de forma acorde.
+// Si no se reconoce el id del mensaje al intentar decodificarlo,
+// retorna UNKOWN_ID.
+int recv_msg(int socket_fd, void* buffer, int max_size);
 ```
 
 Luego, por cada mensaje, el protocolo expone las siguientes funciones:
@@ -123,8 +150,17 @@ void decode_nombre_mensaje(void* buff);
 // disponible al menos suficiente memoria para alojar el mensaje
 // más dos bytes (el identificador y el largo del mensaje).
 // Al igual que pack_msg(), retorna la cantidad de bytes escritos
-// en el buffer o -1 si el cuerpo del mensaje supera los 254 bytes.
+// en el buffer o MESSAGE_TOO_BIG si el cuerpo del mensaje supera los
+// 254 bytes.
 int pack_nombre_mensaje(campos, uint8_t* buff);
+
+// Recibe los campos del mensaje y un socket por parámetros.
+// Crea el mensaje, lo codifica, lo empaqueta y luego lo
+// envía por el socket, asegurandose de que se envie completo.
+// Retorna la cantidad de bytes enviados en caso de éxito.
+// En caso de un error en la comunicación, retorna SOCKET_ERROR
+// y errno estará seteada acorde.
+int send_nombre_mensaje(campos, int socket_fd);
 ```
 
 ## Ejemplo
@@ -156,13 +192,27 @@ int main() {
 	// Una forma de empaquetar
 	struct test_msg msg = create_test_msg(x, y);
 	encode_test_msg(&msg);
-	if(pack_msg(TEST_MSG_ID, sizeof(msg), &msg, buff) == -1) {
+	if(pack_msg(TEST_MSG_ID, sizeof(msg), &msg, buff) == MESSAGE_TOO_BIG) {
 		printf("Error");
 		exit(1);
 	}
 
 	// Otra forma de empaquetar
-	if(pack_test_msg(x, y, buff) == -1) {
+	if(pack_test_msg(x, y, buff) == MESSAGE_TOO_BIG) {
+		printf("Error");
+		exit(1);
+	}
+
+	// Enviar el mensaje directamente por un socket sin empaquetar a mano
+	int socket_fd; // Asumimos que es un socket válido al que se puede escribir
+	if(send_test_msg(x, y, socket_fd) == SOCKET_ERROR) {
+		printf("Error");
+		exit(1);
+	}
+
+	// Recibir un mensaje del socket
+	int msg_id; 
+	if((msg_id = recv_msg(socket_fd, buff, TEST_MSG_SIZE + 2)) < 0){
 		printf("Error");
 		exit(1);
 	}
