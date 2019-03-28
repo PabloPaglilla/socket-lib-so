@@ -80,6 +80,7 @@ int decode_{msg_name} (void *recv_data, void* decoded_data, int max_decoded_size
 	struct {msg_name} msg;
 	msg.id = byte_data[current++];
 	{decode_fields}
+	{network_to_host}
 	memcpy(decoded_data, &msg, sizeof(struct {msg_name}));
 	return 0;
 }}
@@ -94,6 +95,9 @@ int encode_{msg_name}(struct {msg_name} msg, uint8_t* buff, int max_size) {{
 	if(encoded_size > max_size) {{
 		return BUFFER_TOO_SMALL;
 	}}
+
+	{host_to_network}
+	
 	int current = 0;
 	buff[current++] = msg.id;
 	{encode_fields}
@@ -164,12 +168,10 @@ add_string_field_size = """
 
 decode_simple_field = """
 	msg.{field_name} = *(({type}*) (byte_data + current));
-	current += sizeof({type});
-	{network_to_host}"""
+	current += sizeof({type});"""
 decode_array_field = """
 	memcpy(msg.{field_name}, byte_data + current, {length} * sizeof({type}));
-	current += {length} * sizeof({type});
-	{network_to_host}"""
+	current += {length} * sizeof({type});"""
 decode_string_field = """
 	int {field_name}_len = byte_data[current++];
 	msg.{field_name} = malloc({field_name}_len + 1);
@@ -184,12 +186,10 @@ free_decode_pointer = "free(msg.{field_name});"
 
 encode_simple_field = """
 	*(({type}*)(buff + current)) = msg.{field_name};
-	current += sizeof({type});
-	{host_to_network}"""
+	current += sizeof({type});"""
 encode_array_field = """
 	{type} tmp_{field_name}[{length}];
 	memcpy(tmp_{field_name}, msg.{field_name}, {length} * sizeof({type}));
-	{host_to_network}
 	memcpy(buff + current, tmp_{field_name}, {length} * sizeof({type}));
 	current += {length} * sizeof({type});"""
 encode_string_field = """
@@ -220,10 +220,10 @@ simple_field_assignment = "msg.{field_name} = {field_name};"
 array_field_assignment = "memcpy(msg.{field_name}, {field_name}, {len} * sizeof({field_type}));"
 
 array_field_converter = """for(int i = 0; i < {len}; i++) {{
-		msg->{field_name}[i] = {convertion}(msg->{field_name}[i]);
+		msg.{field_name}[i] = {convertion}(msg.{field_name}[i]);
 	}}"""
 
-simple_field_converter = "msg->{field_name} = {convertion}(msg->{field_name});"
+simple_field_converter = "msg.{field_name} = {convertion}(msg.{field_name});"
 
 uint16_ntoh = "ntohs"
 

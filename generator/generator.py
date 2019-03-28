@@ -318,8 +318,8 @@ def generate_functions(file, message):
 	s = templates.message_functions_template.format(
 		msg_name=msg_name, msg_name_upper=msg_name.upper(),
 		create_parameters=create_params,
-		net_to_host_handling=ntoh,
-		host_to_net_handling=hton,
+		network_to_host=ntoh,
+		host_to_network=hton,
 		fields_assignment=fields_assign,
 		parameter_pass=params_passing,
 		add_field_sizes=add_field_sizes(message),
@@ -355,8 +355,7 @@ def decode_field(field, pointers_to_free_on_error):
 		return templates.decode_array_field.format(
 			field_name=field.text,
 			type=get_type(field)[0:-2],
-			length=get_len(field),
-			network_to_host='')
+			length=get_len(field))
 	elif is_string_type(field):
 		ret = templates.decode_string_field.format(
 			field_name=field.text,
@@ -366,8 +365,7 @@ def decode_field(field, pointers_to_free_on_error):
 	else:
 		return templates.decode_simple_field.format(
 			field_name=field.text,
-			type=get_type(field),
-			network_to_host='')
+			type=get_type(field))
 
 def free_decode_pointers(pointers_to_free_on_error):
 	return '\n'.join(
