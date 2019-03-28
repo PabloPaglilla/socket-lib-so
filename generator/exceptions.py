@@ -29,14 +29,3 @@ class InvalidFieldTypeException(GeneratorException):
 				element_type=element_type, element=element_to_xml_string(element))
 		self.message = message	
 		super(InvalidFieldTypeException, self).__init__(message)
-
-class MessageTooBigException(GeneratorException):
-
-	def __init__(self, msg_name, size, message=None):
-		self.msg_name = msg_name
-		self.size = size
-		if message is None:
-			message = 'Message {msg_name} length too big: {size} bytes.'.format(
-				size=size, msg_name=msg_name)
-		self.message = message
-		super(MessageTooBigException, self).__init__(message)

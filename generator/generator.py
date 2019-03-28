@@ -5,18 +5,10 @@ from os import path, remove
 
 import templates, exceptions
 
-type_sizes = {
-	'int8_t': 1,
-	'uint8_t': 1,
-	'int16_t': 2,
-	'uint16_t': 2,
-	'int32_t': 4,
-	'uint32_t': 4,
-	'char': 1,
-	'char*': 8
-}
-
-UINT8_MAX = 2 ** 8 - 1
+types = ['int8_t', 'uint8_t', 
+		'int16_t', 'uint16_t',
+		'int32_t', 'uint32_t',
+		'char']
 
 def generate(xml_source, provided_path):
 
@@ -99,7 +91,7 @@ def get_id(element):
 	return _get_element_attribute(element, 'id')
 
 def _is_valid_type(element_type):
-	return element_type in type_sizes or element_type[0:-2] in type_sizes
+	return element_type in types or element_type[0:-2] in types or element_type[0:-1] in types
 
 def get_type(element):
 
@@ -164,32 +156,6 @@ def generate_msg_defines(file, message):
 		msg_name=msg_name,
 		msg_id=get_id(message))
 	file.write(s)
-
-def get_message_size(message):
-
-	"""Retorna el tamaño de un mensaje en bytes.
-	   Parametros:
-	   	-message: el elemento xml del mensaje"""
-
-	sizes = list(map(get_field_size, message.iter('field')))
-	total_size = sum(sizes)
-	if total_size >= UINT8_MAX:
-		raise exceptions.MessageTooBigException(get_name(message), total_size)
-	return total_size
-
-def get_field_size(field):
-
-	"""Retorna el tamaño de un campo de un mensaje.
-	   Parametros:
-	   	-field: el elemento xml del campo"""
-
-	field_type = get_type(field)
-	if is_array_type(field):
-		type_name = field_type[0:-2]
-		type_size = type_sizes[type_name]
-		amount = int(get_len(field))
-		return type_size * amount
-	return type_sizes[field_type]
 
 def generate_struct(file, message):
 
@@ -317,14 +283,12 @@ def generate_functions(file, message):
 	create_params = create_parameters(message)
 	ntoh = net_to_host_handling(message)
 	hton = host_to_net_handling(message)
-	fields_assign = fields_assignment(message)
 	params_passing = create_parameters_passing(message)
 	s = templates.message_functions_template.format(
 		msg_name=msg_name, msg_name_upper=msg_name.upper(),
 		create_parameters=create_params,
 		network_to_host=ntoh,
 		host_to_network=hton,
-		fields_assignment=fields_assign,
 		parameter_pass=params_passing,
 		add_field_sizes=add_field_sizes(message),
 		decode_fields=decode_fields(message),
@@ -561,47 +525,6 @@ def is_uint32(field):
 	   	-field: el elemento xml del campo"""
 
 	return type_contains(field, '32')
-
-def fields_assignment(message):
-
-	"""Retorna el código que asigna a los campos de un mensaje los
-	valores recibidos por parámetro en la función create.
-	   Parametros:
-	   	-message: el elemento xml del mensaje"""
-
-	ret = ''
-	for field in message.iter('field'):
-		field_name = field.text
-		if is_array_type(field):
-			s = array_field_assignment(field_name, field)
-		else:
-			s = simple_field_assignment(field_name)
-		ret += '\n\t' + s
-	return ret
-
-def array_field_assignment(field_name, field):
-
-	"""Retorna el código que asigna a un campo de un mensaje
-	cuando el campo es de tipo array usando memcpy.
-	   Parametros:
-	   	-field_name: nombre del campo
-	   	-field: elemento xml del campo"""
-
-	lng = get_len(field)
-	field_type = get_type(field)[0:-2]
-	return templates.array_field_assignment.format(
-		field_name=field_name, len=lng,
-		field_type=field_type)
-
-def simple_field_assignment(field_name):
-
-	"""Retorna el código que asigna a un campo de un mensaje
-	cuando el campo no es de tipo array.
-	   Parametros:
-	   	-field_name: nombre del campo"""
-
-	return templates.simple_field_assignment.format(
-		field_name=field_name)
 
 def generate_handling_functions(file, root):
 
