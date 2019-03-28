@@ -49,7 +49,7 @@ struct_declaration_template = """
 struct {msg_name} {{
 	uint8_t id;
 	{field_declarations}
-}} __attribute__((packed));
+}};
 """
 
 header_signatures = """
