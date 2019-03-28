@@ -12,7 +12,8 @@ type_sizes = {
 	'uint16_t': 2,
 	'int32_t': 4,
 	'uint32_t': 4,
-	'char': 1
+	'char': 1,
+	'char*': 8
 }
 
 UINT8_MAX = 2 ** 8 - 1
@@ -122,14 +123,11 @@ def generate_header(root, header):
 	header.write(templates.errors_enum)
 	generate_enum_definitions(header, root)
 	for message in root.iter('message'):
-		msg_size = get_message_size(message)
-		if msg_size > max_msg_size:
-			max_msg_size = msg_size
 		generate_msg_defines(header, message)
 		generate_struct(header, message)
 		generate_signatures(header, message)
 	header.write(templates.msg_handling_functions_declarations)
-	header.write(templates.header_close.format(max_msg_size=max_msg_size))
+	header.write(templates.header_close)
 
 def generate_enum_definitions(file, root):
 
@@ -160,7 +158,7 @@ def generate_msg_defines(file, message):
 	msg_name = get_name(message)
 	s = templates.message_defines_template.format(
 		msg_name_upper=msg_name.upper(),
-		msg_size = get_message_size(message))
+		msg_name=msg_name)
 	file.write(s)
 
 def get_message_size(message):
@@ -285,6 +283,12 @@ def is_array_type(field):
 
 	return type_contains(field, '[]')
 
+def is_string_type(field):
+	return type_contains(field, 'char*')
+
+def is_pointer_type(field):
+	return type_contains(field, '*')
+
 def generate_source(root, source, header_name):
 
 	"""Genera el source file.
@@ -317,8 +321,120 @@ def generate_functions(file, message):
 		net_to_host_handling=ntoh,
 		host_to_net_handling=hton,
 		fields_assignment=fields_assign,
-		parameter_pass=params_passing)
+		parameter_pass=params_passing,
+		add_field_sizes=add_field_sizes(message),
+		decode_fields=decode_fields(message),
+		encode_fields=encode_fields(message),
+		destroy_fields=destroy_fields(message),
+		init_fields=init_fields(message))
 	file.write(s)
+
+def add_field_sizes(message):
+	return '\n'.join(list(map(add_field_size, message.iter('field'))))
+
+def add_field_size(field):
+	if is_array_type(field):
+		return templates.add_array_field_size.format(
+			type=get_type(field)[0:-2], length=get_len(field))
+	elif is_string_type(field):
+		return templates.add_string_field_size.format(
+			field_name=field.text)
+	else:
+		return templates.add_simple_field_size.format(
+			type=get_type(field))
+
+def decode_fields(message):
+	pointers_to_free_on_error = []
+	field_decodes = []
+	for field in message.iter('field'):
+		field_decodes.append(decode_field(field, pointers_to_free_on_error))
+	return ''.join(field_decodes)
+
+def decode_field(field, pointers_to_free_on_error):
+	if is_array_type(field):
+		return templates.decode_array_field.format(
+			field_name=field.text,
+			type=get_type(field)[0:-2],
+			length=get_len(field),
+			network_to_host='')
+	elif is_string_type(field):
+		ret = templates.decode_string_field.format(
+			field_name=field.text,
+			free_resources=free_decode_pointers(pointers_to_free_on_error))
+		pointers_to_free_on_error.append(field.text)
+		return ret
+	else:
+		return templates.decode_simple_field.format(
+			field_name=field.text,
+			type=get_type(field),
+			network_to_host='')
+
+def free_decode_pointers(pointers_to_free_on_error):
+	return '\n'.join(
+		list(
+			map(
+				lambda x: templates.free_decode_pointer.format(field_name=x),
+				pointers_to_free_on_error
+			)
+		)
+	)
+
+def encode_fields(message):
+	return '\n'.join(list(map(encode_field, message.iter('field'))))
+
+def encode_field(field):
+	if is_array_type(field):
+		return templates.encode_array_field.format(
+			field_name=field.text,
+			type=get_type(field)[0:-2],
+			length=get_len(field),
+			host_to_network='')
+	elif is_string_type(field):
+		return templates.encode_string_field.format(
+			field_name=field.text)
+	else:
+		return templates.encode_simple_field.format(
+			field_name=field.text,
+			type=get_type(field),
+			host_to_network='')
+
+def init_fields(message):
+	pointers_to_free_on_error = []
+	field_inits = []
+	for field in message.iter('field'):
+		field_inits.append(init_field(field, pointers_to_free_on_error))
+	return '\n'.join(field_inits)
+
+def init_field(field, pointers_to_free_on_error):
+	if is_array_type(field):
+		return templates.init_array_field.format(
+			field_name=field.text,
+			type=get_type(field)[0:-2],
+			length=get_len(field))
+	elif is_string_type(field):
+		ret = templates.init_string_field.format(
+			field_name=field.text,
+			free_resources=free_init_pointers(pointers_to_free_on_error))
+		pointers_to_free_on_error.append(field.text)
+		return ret
+	else:
+		return templates.init_simple_field.format(field_name=field.text)
+
+def free_init_pointers(pointers_to_free_on_error):
+	return '\n'.join(list(map(
+				lambda x: templates.destroy_field.format(field_name=x),
+				pointers_to_free_on_error
+			)))	
+
+def destroy_fields(message):
+	l = []
+	for field in message.iter('field'):
+		if is_pointer_type(field):
+			l.append(destroy_field(field))
+	return '\n'.join(l)
+
+def destroy_field(field):
+	return templates.destroy_field.format(field_name=field.text)
 
 def get_ntoh_converter(field):
 
@@ -493,27 +609,39 @@ def generate_handling_functions(file, root):
 	   	-file: archivo al que escribir
 	   	-root: elemento root del archivo xml"""
 
-	switch_cases = decoder_switch_cases(root)
 	s = templates.msg_handling_functions.format(
-		switch_cases=switch_cases)
+		decode_switch_cases=decode_switch_cases(root),
+		destroy_switch_cases=destroy_switch_cases(root),
+		bytes_needed_switch_cases=bytes_needed_switch_cases(root),
+		struct_size_switch_cases=struct_size_switch_cases(root),
+		number_of_messages=len(list(root.iter('message'))),
+		struct_sizes=', '.join(list(map(get_struct_sizeof, root.iter('message')))))
 	file.write(s)
 
-def decoder_switch_cases(root):
+def decode_switch_cases(root):
+	return switch_cases(root, templates.decode_switch_case)	
 
-	"""Retorna el string del switch que se utilizará en la
-	función decode para reconocer el tipo del mensaje y
-	actual acorde.
-	   Parametros:
-	   	-root: elemento root del archivo xml"""
+def destroy_switch_cases(root):
+	return switch_cases(root, templates.destroy_switch_case)
+
+def bytes_needed_switch_cases(root):
+	return switch_cases(root, templates.bytes_needed_switch_case)
+
+def struct_size_switch_cases(root):
+	return switch_cases(root, templates.struct_size_switch_case)
+
+def switch_cases(root, template):
 
 	ret = ''
-	template = templates.decoder_switch_case
 	for message in root.iter('message'):
 		msg_name = get_name(message)
 		ret += '\n\t' + template.format(
 			msg_name=msg_name,
 			msg_name_upper=msg_name.upper())
 	return ret
+
+def get_struct_sizeof(message):
+	return templates.struct_size.format(msg_name=get_name(message))
 
 def parse_cli_arguments():
 
