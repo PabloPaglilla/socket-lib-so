@@ -97,11 +97,11 @@ int encode_{msg_name}(struct {msg_name} msg, uint8_t* buff, int max_size) {{
 	}}
 
 	{host_to_network}
-	
+
 	int current = 0;
 	buff[current++] = msg.id;
 	{encode_fields}
-	return 0;
+	return encoded_size;
 }}
 
 int init_{msg_name}(struct {msg_name}* msg, {create_parameters}) {{
