@@ -23,7 +23,8 @@ header_close = """
 #endif"""
 
 errors_enum = """enum errors { UNKNOWN_ID = -20, BAD_DATA,
-	ALLOC_ERROR, BUFFER_TOO_SMALL, CONN_CLOSED, SOCKET_ERROR = -1 };
+	ALLOC_ERROR, BUFFER_TOO_SMALL, PTR_FIELD_TOO_LONG,
+	CONN_CLOSED, SOCKET_ERROR = -1 };
 """
 
 enum_definition = """enum {enum_name} {{ {values} }};
@@ -188,12 +189,13 @@ encode_simple_field = """
 	*(({type}*)(buff + current)) = msg.{field_name};
 	current += sizeof({type});"""
 encode_array_field = """
-	{type} tmp_{field_name}[{length}];
-	memcpy(tmp_{field_name}, msg.{field_name}, {length} * sizeof({type}));
-	memcpy(buff + current, tmp_{field_name}, {length} * sizeof({type}));
+	memcpy(buff + current, msg.{field_name}, {length} * sizeof({type}));
 	current += {length} * sizeof({type});"""
 encode_string_field = """
 	int {field_name}_len = strlen(msg.{field_name});
+	if({field_name}_len > 255) {{
+		return PTR_FIELD_TOO_LONG;
+	}}
 	buff[current++] = {field_name}_len;
 	memcpy(buff + current, msg.{field_name}, {field_name}_len);
 	current += {field_name}_len;"""
