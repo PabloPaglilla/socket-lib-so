@@ -36,7 +36,7 @@ int destroy(void*);
 int bytes_needed_to_encode(void*);
 int struct_size_from_id(uint8_t);
 
-int pack_msg(uint8_t, void*, uint8_t*);
+int pack_msg(uint16_t, void*, uint8_t*);
 
 int recv_msg(int, void*, int);"""
 
@@ -117,7 +117,7 @@ void destroy_{msg_name}(void* buffer) {{
 }}
 
 int pack_{msg_name}({create_parameters}, uint8_t *buff, int max_size) {{
-	uint8_t local_buffer[max_size - 1];
+	uint8_t local_buffer[max_size - 2];
 	struct {msg_name} msg;
 	int error, encoded_size;
 	if((error = init_{msg_name}(&msg, {parameter_pass})) < 0) {{
@@ -306,22 +306,34 @@ int struct_size_from_id(uint8_t msg_id) {{
 	return size;
 }}
 
-int pack_msg(uint8_t body_size, void *msg_body, uint8_t *buff) {{
-	buff[0] = body_size;
-	memcpy(buff + 1, msg_body, body_size);
-	return body_size + 1;
+int pack_msg(uint16_t body_size, void *msg_body, uint8_t *buff) {{
+	*((uint16_t*)buff) = htons(body_size);
+	memcpy(buff + 2, msg_body, body_size);
+	return body_size + 2;
 }}
 
-uint8_t read_one_byte(int socket_fd) {{
-	uint8_t byte = 0;
-	int ret = recv(socket_fd, &byte, 1, 0);
-	if(ret == 0) {{
-		return CONN_CLOSED;
+int recv_n_bytes(int socket_fd, void* buffer, int bytes_to_read) {{
+	uint8_t* byte_buffer = (uint8_t*) buffer;
+	int bytes_rcvd = 0;
+	int num_bytes = 0;
+	while(bytes_rcvd < bytes_to_read) {{
+		num_bytes = recv(socket_fd, byte_buffer + bytes_rcvd, bytes_to_read - bytes_rcvd, 0);
+		if(num_bytes == 0) {{
+			return CONN_CLOSED;
+		}} else if(num_bytes == -1) {{
+			return SOCKET_ERROR;
+		}}
+		bytes_rcvd += num_bytes;
 	}}
-	if(ret == -1) {{
-		return SOCKET_ERROR;
+}}
+
+uint16_t recv_header(int socket_fd) {{
+	uint16_t header = 0;
+	int error = 0;
+	if((error = recv_n_bytes(socket_fd, &header, 2)) < 0) {{
+		return error;
 	}}
-	return byte;
+	return ntohs(header);
 }}
 
 int recv_msg(int socket_fd, void* buffer, int max_size) {{
@@ -330,23 +342,18 @@ int recv_msg(int socket_fd, void* buffer, int max_size) {{
 		return BUFFER_TOO_SMALL;
 	}}
 	
-	uint8_t msg_size = 0, msg_id = 0;
-	int bytes_rcvd = 0, num_bytes;
+	uint16_t msg_size = 0;
+	uint8_t msg_id = 0;
+	int error;
 	
-	if((msg_size = read_one_byte(socket_fd)) < 0) {{
+	if((msg_size = recv_header(socket_fd)) < 0) {{
 		return msg_size;
 	}}
 
 	uint8_t local_buffer[msg_size];
 
-	while(bytes_rcvd < msg_size) {{
-		num_bytes = recv(socket_fd, local_buffer + bytes_rcvd, msg_size - bytes_rcvd, 0);
-		if(num_bytes == 0) {{
-			return CONN_CLOSED;
-		}} else if(num_bytes == -1) {{
-			return SOCKET_ERROR;
-		}}
-		bytes_rcvd += num_bytes;
+	if((error = recv_n_bytes(socket_fd, local_buffer, msg_size)) < 0) {{
+		return error;
 	}}
 
 	return decode(local_buffer, buffer, max_size);
@@ -365,7 +372,7 @@ int send_full_msg(int socket_fd, uint8_t* buffer, int bytes_to_send) {{
 }}
 
 int get_max_msg_size() {{
-	int sizes[{number_of_messages}] = {{{struct_sizes}}};
+	int sizes[{number_of_messages}] = {{ {struct_sizes} }};
 	int max = -1;
 	for(int i = 0; i < {number_of_messages}; i++) {{
 		if(sizes[i] > max) {{
