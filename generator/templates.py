@@ -41,7 +41,7 @@ int pack_msg(uint8_t, void*, uint8_t*);
 int recv_msg(int, void*, int);"""
 
 message_defines_template = """
-#define {msg_name_upper}_ID 0
+#define {msg_name_upper}_ID {msg_id}
 #define {msg_name_upper} "test_msg"
 #define {msg_name_upper}_SIZE sizeof(struct {msg_name})
 """
@@ -337,14 +337,7 @@ int recv_msg(int socket_fd, void* buffer, int max_size) {{
 		return msg_size;
 	}}
 
-	if((msg_id = read_one_byte(socket_fd)) < 0) {{
-		return msg_id;
-	}}
-
-	// Ya se recibió el id del mensaje
-	bytes_rcvd = 1;
 	uint8_t local_buffer[msg_size];
-	local_buffer[0] = msg_id;
 
 	while(bytes_rcvd < msg_size) {{
 		num_bytes = recv(socket_fd, local_buffer + bytes_rcvd, msg_size - bytes_rcvd, 0);

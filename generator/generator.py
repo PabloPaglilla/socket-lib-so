@@ -95,6 +95,9 @@ def get_name(element):
 def get_len(element):
 	return _get_element_attribute(element, 'len')
 
+def get_id(element):
+	return _get_element_attribute(element, 'id')
+
 def _is_valid_type(element_type):
 	return element_type in type_sizes or element_type[0:-2] in type_sizes
 
@@ -158,7 +161,8 @@ def generate_msg_defines(file, message):
 	msg_name = get_name(message)
 	s = templates.message_defines_template.format(
 		msg_name_upper=msg_name.upper(),
-		msg_name=msg_name)
+		msg_name=msg_name,
+		msg_id=get_id(message))
 	file.write(s)
 
 def get_message_size(message):
@@ -429,7 +433,7 @@ def destroy_fields(message):
 	for field in message.iter('field'):
 		if is_pointer_type(field):
 			l.append(destroy_field(field))
-	return '\n'.join(l)
+	return '\n\t'.join(l)
 
 def destroy_field(field):
 	return templates.destroy_field.format(field_name=field.text)
@@ -613,7 +617,7 @@ def generate_handling_functions(file, root):
 		bytes_needed_switch_cases=bytes_needed_switch_cases(root),
 		struct_size_switch_cases=struct_size_switch_cases(root),
 		number_of_messages=len(list(root.iter('message'))),
-		struct_sizes=', '.join(list(map(get_struct_sizeof, root.iter('message')))))
+		struct_sizes=(',\n' + '\t'*5).join(list(map(get_struct_sizeof, root.iter('message')))))
 	file.write(s)
 
 def decode_switch_cases(root):
