@@ -178,6 +178,13 @@ def field_declaration(field):
 	   Parametros:
 	   	-field: el elemento xml del campo"""
 
+	if is_pointer_type(field) and not is_string_type(field):
+		ret = templates.field_description_template.format(
+			field_type='\tuint8_t',
+			field_name=field.text + '_len;',
+			array_def='')
+		ret += '\t' + field_description(field) + ';'
+		return ret
 	return field_description(field) + ';'
 
 def field_description(field):
@@ -217,8 +224,15 @@ def create_parameters(message):
 	   Parametros:
 	   	-message: el elemento xml del mensaje"""
 
-	params = list(map(field_description, message.iter('field')))
+	params = list(map(single_create_parameter, message.iter('field')))
 	return ", ".join(params)
+
+def single_create_parameter(field):
+	if is_pointer_type(field) and not is_string_type(field):
+		return templates.pointer_create_parameter.format(
+			field_name=field.text,
+			field_description=field_description(field))
+	return field_description(field)
 
 def create_parameters_passing(message):
 
@@ -232,8 +246,14 @@ def create_parameters_passing(message):
 	   Parametros:
 	   	-message: el elemento xml del mensaje"""
 
-	params = list(map(lambda x: x.text, message.iter('field')))
+	params = list(map(single_create_parameter_pass, message.iter('field')))
 	return ", ".join(params)
+
+def single_create_parameter_pass(field):
+	if is_pointer_type(field) and not is_string_type(field):
+		return templates.pointer_create_parameter_pass.format(
+			field_name=field.text)
+	return field.text
 
 def type_contains(field, str):
 
@@ -307,6 +327,10 @@ def add_field_size(field):
 	elif is_string_type(field):
 		return templates.add_string_field_size.format(
 			field_name=field.text)
+	elif is_pointer_type(field):
+		return templates.add_pointer_field_size.format(
+			field_name=field.text,
+			type=get_type(field)[0:-1])
 	else:
 		return templates.add_simple_field_size.format(
 			type=get_type(field))
@@ -327,6 +351,13 @@ def decode_field(field, pointers_to_free_on_error):
 	elif is_string_type(field):
 		ret = templates.decode_string_field.format(
 			field_name=field.text,
+			free_resources=free_decode_pointers(pointers_to_free_on_error))
+		pointers_to_free_on_error.append(field.text)
+		return ret
+	elif is_pointer_type(field):
+		ret = templates.decode_pointer_field.format(
+			field_name=field.text,
+			type=get_type(field)[0:-1],
 			free_resources=free_decode_pointers(pointers_to_free_on_error))
 		pointers_to_free_on_error.append(field.text)
 		return ret
@@ -358,6 +389,10 @@ def encode_field(field):
 	elif is_string_type(field):
 		return templates.encode_string_field.format(
 			field_name=field.text)
+	elif is_pointer_type(field):
+		return templates.encode_pointer_field.format(
+			field_name=field.text,
+			type=get_type(field)[0:-1])
 	else:
 		return templates.encode_simple_field.format(
 			field_name=field.text,
@@ -380,6 +415,13 @@ def init_field(field, pointers_to_free_on_error):
 	elif is_string_type(field):
 		ret = templates.init_string_field.format(
 			field_name=field.text,
+			free_resources=free_init_pointers(pointers_to_free_on_error))
+		pointers_to_free_on_error.append(field.text)
+		return ret
+	elif is_pointer_type(field):
+		ret = templates.init_pointer_field.format(
+			field_name=field.text,
+			type=get_type(field)[0:-1],
 			free_resources=free_init_pointers(pointers_to_free_on_error))
 		pointers_to_free_on_error.append(field.text)
 		return ret
@@ -465,6 +507,8 @@ def convert(message, convert_getter):
 			field_name = field.text
 			if is_array_type(field):
 				s = array_convertion(field_name, convertion, field)
+			elif is_pointer_type(field):
+				s = pointer_convertion(field_name, convertion)
 			else:
 				s = simple_field_convertion(field_name, convertion)
 			ret += '\n\t' + s
@@ -485,6 +529,11 @@ def array_convertion(field_name, convertion, field):
 	return templates.array_field_converter.format(
 					field_name=field_name, len=lng,
 					convertion=convertion)
+
+def pointer_convertion(field_name, convertion):
+	return templates.pointer_field_converter.format(
+		field_name=field_name,
+		convertion=convertion)
 
 def simple_field_convertion(field_name, convertion):
 

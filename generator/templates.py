@@ -102,6 +102,7 @@ int encode_{msg_name}(struct {msg_name} msg, uint8_t* buff, int max_size) {{
 	int current = 0;
 	buff[current++] = msg.id;
 	{encode_fields}
+	{network_to_host}
 	return encoded_size;
 }}
 
@@ -124,6 +125,7 @@ int pack_{msg_name}({create_parameters}, uint8_t *buff, int max_size) {{
 		return error;
 	}}
 	if((encoded_size = encode_{msg_name}(msg, local_buffer, max_size - 1)) < 0) {{
+		destroy_{msg_name}(&msg);
 		return encoded_size;
 	}}
 	destroy_{msg_name}(&msg);
@@ -166,6 +168,13 @@ add_string_field_size = """
 	encoded_size += 1;
 	encoded_size += strlen(msg->{field_name});
 """
+add_pointer_field_size = """
+	if(msg->{field_name} == NULL) {{
+		return BAD_DATA;
+	}}
+	encoded_size += 1;
+	encoded_size += msg->{field_name}_len * sizeof({type});
+"""
 
 decode_simple_field = """
 	msg.{field_name} = *(({type}*) (byte_data + current));
@@ -183,6 +192,16 @@ decode_string_field = """
 	memcpy(msg.{field_name}, byte_data + current, {field_name}_len);
 	msg.{field_name}[{field_name}_len] = '\\0';
 	current += {field_name}_len;"""
+decode_pointer_field = """
+	msg.{field_name}_len = byte_data[current++];
+	msg.{field_name} = malloc(msg.{field_name}_len * sizeof({type}));
+	if(msg.{field_name} == NULL) {{
+		{free_resources}
+		return ALLOC_ERROR;
+	}}
+	memcpy(msg.{field_name}, byte_data + current, msg.{field_name}_len * sizeof({type}));
+	current += msg.{field_name}_len * sizeof({type});
+"""
 free_decode_pointer = "free(msg.{field_name});"
 
 encode_simple_field = """
@@ -199,6 +218,10 @@ encode_string_field = """
 	buff[current++] = {field_name}_len;
 	memcpy(buff + current, msg.{field_name}, {field_name}_len);
 	current += {field_name}_len;"""
+encode_pointer_field = """
+	buff[current++] = msg.{field_name}_len;
+	memcpy(buff + current, msg.{field_name}, msg.{field_name}_len * sizeof({type}));
+	current += msg.{field_name}_len * sizeof({type});"""
 
 init_simple_field = "msg->{field_name} = {field_name};"
 init_array_field = "\tmemcpy(msg->{field_name}, {field_name}, {length} * sizeof({type}));"
@@ -214,6 +237,18 @@ init_string_field = """
 	}}
 	strcpy(msg->{field_name}, {field_name});
 """
+init_pointer_field = """
+	if({field_name} == NULL) {{
+		{free_resources}
+		return BAD_DATA;
+	}}
+	msg->{field_name}_len = {field_name}_len;
+	msg->{field_name} = malloc({field_name}_len * sizeof({type}));
+	if(msg->{field_name} == NULL) {{
+		{free_resources}
+		return BAD_DATA;
+	}}
+	memcpy(msg->{field_name}, {field_name}, {field_name}_len * sizeof({type}));"""
 
 destroy_field = "free(msg->{field_name});"
 
@@ -222,6 +257,9 @@ simple_field_assignment = "msg.{field_name} = {field_name};"
 array_field_assignment = "memcpy(msg.{field_name}, {field_name}, {len} * sizeof({field_type}));"
 
 array_field_converter = """for(int i = 0; i < {len}; i++) {{
+		msg.{field_name}[i] = {convertion}(msg.{field_name}[i]);
+	}}"""
+pointer_field_converter = """for(int i = 0; i < msg.{field_name}_len; i++) {{
 		msg.{field_name}[i] = {convertion}(msg.{field_name}[i]);
 	}}"""
 
@@ -238,6 +276,9 @@ uint32_hton = "htonl"
 field_description_template = """
 {field_type} {field_name} {array_def}
 """
+
+pointer_create_parameter = "uint8_t {field_name}_len, {field_description}"
+pointer_create_parameter_pass = "{field_name}_len, {field_name}"
 
 msg_handling_functions = """
 typedef int (*decoder_t)(void*, void*, int);
