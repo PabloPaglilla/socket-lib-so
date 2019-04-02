@@ -33,7 +33,7 @@ enum_definition = """enum {enum_name} {{ {values} }};
 msg_handling_functions_declarations = """
 int decode(void*, void*, int);
 int destroy(void*);
-int bytes_needed_to_encode(void*);
+int bytes_needed_to_pack(void*);
 int struct_size_from_id(uint8_t);
 
 int pack_msg(uint16_t, void*, uint8_t*);
@@ -324,7 +324,7 @@ int destroy(void* buffer) {{
 	return 0;
 }}
 
-int bytes_needed_to_encode(void* buffer) {{
+int bytes_needed_to_pack(void* buffer) {{
 	
 	uint8_t* byte_data = (uint8_t*) buffer;
 	int msg_id = byte_data[0];
@@ -335,7 +335,7 @@ int bytes_needed_to_encode(void* buffer) {{
 			return UNKNOWN_ID;
 	}}
 
-	return size_getter(buffer);
+	return size_getter(buffer) + 2;
 }}
 
 int struct_size_from_id(uint8_t msg_id) {{
