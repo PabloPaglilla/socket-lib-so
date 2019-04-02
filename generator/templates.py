@@ -55,7 +55,7 @@ struct {msg_name} {{
 
 header_signatures = """
 int decode_{msg_name}(void*, void*, int);
-int encode_{msg_name}(struct {msg_name}, uint8_t*, int);
+int encode_{msg_name}(void*, uint8_t*, int);
 int init_{msg_name}(struct {msg_name}*, {create_parameters});
 void destroy_{msg_name}(void*);
 int pack_{msg_name}({create_parameters}, uint8_t *, int);
@@ -86,9 +86,10 @@ int decode_{msg_name} (void *recv_data, void* decoded_data, int max_decoded_size
 	return 0;
 }}
 
-int encode_{msg_name}(struct {msg_name} msg, uint8_t* buff, int max_size) {{
+int encode_{msg_name}(void* msg_buffer, uint8_t* buff, int max_size) {{
 	
 	int encoded_size = 0;
+	struct {msg_name} msg = *((struct {msg_name}*) msg_buffer);
 
 	if((encoded_size = encoded_{msg_name}_size(&msg)) < 0) {{
 		return encoded_size;
@@ -124,7 +125,7 @@ int pack_{msg_name}({create_parameters}, uint8_t *buff, int max_size) {{
 	if((error = init_{msg_name}(&msg, {parameter_pass})) < 0) {{
 		return error;
 	}}
-	if((encoded_size = encode_{msg_name}(msg, local_buffer, max_size - 1)) < 0) {{
+	if((encoded_size = encode_{msg_name}(&msg, local_buffer, max_size - 1)) < 0) {{
 		destroy_{msg_name}(&msg);
 		return encoded_size;
 	}}
