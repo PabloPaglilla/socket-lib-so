@@ -9,7 +9,7 @@ source_includes = """#include <stdint.h>
 #include <sys/socket.h>
 #include "{header_name}"
 
-int send_full_msg(int, uint8_t*, int);
+int _send_full_msg(int, uint8_t*, int);
 int get_max_msg_size();
 """
 
@@ -34,6 +34,7 @@ msg_handling_functions_declarations = """
 int decode(void*, void*, int);
 int destroy(void*);
 int bytes_needed_to_pack(void*);
+int send_msg(int, void*);
 int struct_size_from_id(uint8_t);
 
 int pack_msg(uint16_t, void*, uint8_t*);
@@ -154,7 +155,7 @@ int send_{msg_name}({create_parameters}, int socket_fd) {{
 		return bytes_to_send;
 	}}
 
-	ret = send_full_msg(socket_fd, local_buffer, bytes_to_send);
+	ret = _send_full_msg(socket_fd, local_buffer, bytes_to_send);
 	free(local_buffer);
 	return ret;
 }}
@@ -284,6 +285,7 @@ pointer_create_parameter_pass = "{field_name}_len, {field_name}"
 msg_handling_functions = """
 typedef int (*decoder_t)(void*, void*, int);
 typedef void (*destroyer_t)(void*);
+typedef int (*encoder_t)(void*, uint8_t*, int);
 typedef int (*encoded_size_getter_t)(void*);
 
 int decode(void *data, void *buff, int max_size) {{
@@ -337,6 +339,29 @@ int bytes_needed_to_pack(void* buffer) {{
 	}}
 
 	return size_getter(buffer) + 2;
+}}
+
+int send_msg(int socket_fd, void* buffer) {{
+	
+	uint8_t* byte_data = (uint8_t*) buffer;
+	int msg_id = byte_data[0];
+	encoder_t encoder;
+
+	switch(msg_id) {{{send_switch_cases}
+		default:
+			return UNKNOWN_ID;
+	}}
+
+	int packed_bytes = bytes_needed_to_pack(buffer);
+	int encoded_bytes = packed_bytes - 2;
+	int error;
+	uint8_t encoded[encoded_bytes];
+	uint8_t packed[packed_bytes];
+	if((error = encoder(buffer, encoded, encoded_bytes)) < 0) {{
+		return error;
+	}}
+	pack_msg(encoded_bytes, encoded, packed);
+	return _send_full_msg(socket_fd, packed, packed_bytes);
 }}
 
 int struct_size_from_id(uint8_t msg_id) {{
@@ -401,7 +426,7 @@ int recv_msg(int socket_fd, void* buffer, int max_size) {{
 	return decode(local_buffer, buffer, max_size);
 }}
 
-int send_full_msg(int socket_fd, uint8_t* buffer, int bytes_to_send) {{
+int _send_full_msg(int socket_fd, uint8_t* buffer, int bytes_to_send) {{
 	int num_bytes, bytes_sent = 0;
 	while(bytes_to_send > bytes_sent) {{
 		num_bytes = send(socket_fd, buffer + bytes_sent, bytes_to_send - bytes_sent, 0);
@@ -441,6 +466,11 @@ destroy_switch_case = """
 bytes_needed_switch_case = """
 		case {msg_name_upper}_ID:
 			size_getter = &encoded_{msg_name}_size;
+			break;"""
+
+send_switch_cases = """
+		case {msg_name_upper}_ID:
+			encoder = &encode_{msg_name};
 			break;"""
 
 struct_size_switch_case = """

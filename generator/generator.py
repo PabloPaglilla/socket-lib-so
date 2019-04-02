@@ -587,6 +587,7 @@ def generate_handling_functions(file, root):
 		decode_switch_cases=decode_switch_cases(root),
 		destroy_switch_cases=destroy_switch_cases(root),
 		bytes_needed_switch_cases=bytes_needed_switch_cases(root),
+		send_switch_cases=send_switch_cases(root),
 		struct_size_switch_cases=struct_size_switch_cases(root),
 		number_of_messages=len(list(root.iter('message'))),
 		struct_sizes=(',\n' + '\t'*5).join(list(map(get_struct_sizeof, root.iter('message')))))
@@ -600,6 +601,9 @@ def destroy_switch_cases(root):
 
 def bytes_needed_switch_cases(root):
 	return switch_cases(root, templates.bytes_needed_switch_case)
+
+def send_switch_cases(root):
+	return switch_cases(root, templates.send_switch_cases)
 
 def struct_size_switch_cases(root):
 	return switch_cases(root, templates.struct_size_switch_case)
