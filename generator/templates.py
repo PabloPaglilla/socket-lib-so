@@ -39,7 +39,10 @@ int struct_size_from_id(uint8_t);
 
 int pack_msg(uint16_t, void*, uint8_t*);
 
-int recv_msg(int, void*, int);"""
+int recv_msg(int, void*, int);
+
+int get_max_msg_size();
+"""
 
 message_defines_template = """
 #define {msg_name_upper}_ID {msg_id}
