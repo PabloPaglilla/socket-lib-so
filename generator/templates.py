@@ -43,7 +43,6 @@ int recv_msg(int, void*, int);"""
 
 message_defines_template = """
 #define {msg_name_upper}_ID {msg_id}
-#define {msg_name_upper} "test_msg"
 #define {msg_name_upper}_SIZE sizeof(struct {msg_name})
 """
 
