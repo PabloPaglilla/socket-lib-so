@@ -5,6 +5,7 @@ header_includes = """#include <stdint.h>
 source_includes = """#include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
+#include <endian.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include "{header_name}"
@@ -276,6 +277,10 @@ uint16_hton = "htons"
 uint32_ntoh = "ntohl"
 
 uint32_hton = "htonl"
+
+uint64_ntoh = "be64toh"
+
+uint64_hton = "htobe64"
 
 field_description_template = """
 {field_type} {field_name} {array_def}

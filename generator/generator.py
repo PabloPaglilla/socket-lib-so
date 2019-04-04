@@ -462,6 +462,8 @@ def get_ntoh_converter(field):
 		return templates.uint16_ntoh
 	elif is_uint32(field):
 		return templates.uint32_ntoh
+	elif is_uint64(field):
+		return templates.uint64_ntoh
 
 def get_hton_converter(field):
 
@@ -474,6 +476,8 @@ def get_hton_converter(field):
 		return templates.uint16_hton
 	elif is_uint32(field):
 		return templates.uint32_hton
+	elif is_uint64(field):
+		return templates.uint64_hton
 
 def net_to_host_handling(message):
 
@@ -562,7 +566,7 @@ def should_be_converted(field):
 	   Parametros:
 	   	-field: el elemento xml del campo"""
 
-	return is_uint16(field) or is_uint32(field)
+	return is_uint16(field) or is_uint32(field) or is_uint64(field)
 
 def is_uint16(field):
 
@@ -581,6 +585,9 @@ def is_uint32(field):
 	   	-field: el elemento xml del campo"""
 
 	return type_contains(field, '32')
+
+def is_uint64(field):
+	return type_contains(field, '64')
 
 def generate_handling_functions(file, root):
 
