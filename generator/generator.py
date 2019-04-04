@@ -224,8 +224,11 @@ def create_parameters(message):
 	   Parametros:
 	   	-message: el elemento xml del mensaje"""
 
-	params = list(map(single_create_parameter, message.iter('field')))
-	return ", ".join(params)
+	param_list = list(map(single_create_parameter, message.iter('field')))
+	params = ", ".join(param_list)
+	if params != '':
+		params += ','
+	return params
 
 def single_create_parameter(field):
 	if is_pointer_type(field) and not is_string_type(field):
@@ -246,8 +249,11 @@ def create_parameters_passing(message):
 	   Parametros:
 	   	-message: el elemento xml del mensaje"""
 
-	params = list(map(single_create_parameter_pass, message.iter('field')))
-	return ", ".join(params)
+	param_list = list(map(single_create_parameter_pass, message.iter('field')))
+	params = ", ".join(param_list)
+	if params != '':
+		params += ','
+	return params
 
 def single_create_parameter_pass(field):
 	if is_pointer_type(field) and not is_string_type(field):

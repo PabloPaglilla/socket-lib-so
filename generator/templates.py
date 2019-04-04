@@ -56,10 +56,10 @@ struct {msg_name} {{
 header_signatures = """
 int decode_{msg_name}(void*, void*, int);
 int encode_{msg_name}(void*, uint8_t*, int);
-int init_{msg_name}(struct {msg_name}*, {create_parameters});
+int init_{msg_name}({create_parameters} struct {msg_name}*);
 void destroy_{msg_name}(void*);
-int pack_{msg_name}({create_parameters}, uint8_t *, int);
-int send_{msg_name}({create_parameters}, int);
+int pack_{msg_name}({create_parameters} uint8_t *, int);
+int send_{msg_name}({create_parameters} int);
 """
 
 message_functions_template = """
@@ -107,7 +107,7 @@ int encode_{msg_name}(void* msg_buffer, uint8_t* buff, int max_size) {{
 	return encoded_size;
 }}
 
-int init_{msg_name}(struct {msg_name}* msg, {create_parameters}) {{
+int init_{msg_name}({create_parameters} struct {msg_name}* msg) {{
 	msg->id = {msg_name_upper}_ID;
 	{init_fields}
 	return 0;
@@ -118,11 +118,11 @@ void destroy_{msg_name}(void* buffer) {{
 	{destroy_fields}
 }}
 
-int pack_{msg_name}({create_parameters}, uint8_t *buff, int max_size) {{
+int pack_{msg_name}({create_parameters} uint8_t *buff, int max_size) {{
 	uint8_t local_buffer[max_size - 2];
 	struct {msg_name} msg;
 	int error, encoded_size;
-	if((error = init_{msg_name}(&msg, {parameter_pass})) < 0) {{
+	if((error = init_{msg_name}({parameter_pass} &msg)) < 0) {{
 		return error;
 	}}
 	if((encoded_size = encode_{msg_name}(&msg, local_buffer, max_size - 1)) < 0) {{
@@ -133,7 +133,7 @@ int pack_{msg_name}({create_parameters}, uint8_t *buff, int max_size) {{
 	return pack_msg(encoded_size, local_buffer, buff);
 }}
 
-int send_{msg_name}({create_parameters}, int socket_fd) {{
+int send_{msg_name}({create_parameters} int socket_fd) {{
 
 	int bytes_to_send, ret;
 	int current_buffer_size = sizeof(struct {msg_name});
@@ -142,7 +142,7 @@ int send_{msg_name}({create_parameters}, int socket_fd) {{
 		return ALLOC_ERROR;
 	}}
 
-	while((bytes_to_send = pack_{msg_name}({parameter_pass}, local_buffer, current_buffer_size)) == BUFFER_TOO_SMALL) {{
+	while((bytes_to_send = pack_{msg_name}({parameter_pass} local_buffer, current_buffer_size)) == BUFFER_TOO_SMALL) {{
 		current_buffer_size *= 2;
 		local_buffer = realloc(local_buffer, current_buffer_size);
 		if(local_buffer == NULL) {{
