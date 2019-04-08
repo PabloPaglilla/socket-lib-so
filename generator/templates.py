@@ -10,6 +10,9 @@ source_includes = """#include <stdint.h>
 #include <sys/socket.h>
 #include "{header_name}"
 
+#define MAX_STRING_SIZE 2048
+#define MAX_PTR_COUNT 1024
+
 int _send_full_msg(int, uint8_t*, int);
 int get_max_msg_size();
 """
@@ -170,14 +173,14 @@ add_string_field_size = """
 	if(msg->{field_name} == NULL) {{
 		return BAD_DATA;
 	}}
-	encoded_size += 1;
+	encoded_size += 2;
 	encoded_size += strlen(msg->{field_name});
 """
 add_pointer_field_size = """
 	if(msg->{field_name} == NULL) {{
 		return BAD_DATA;
 	}}
-	encoded_size += 1;
+	encoded_size += 2;
 	encoded_size += msg->{field_name}_len * sizeof({type});
 """
 
@@ -188,7 +191,8 @@ decode_array_field = """
 	memcpy(msg.{field_name}, byte_data + current, {length} * sizeof({type}));
 	current += {length} * sizeof({type});"""
 decode_string_field = """
-	int {field_name}_len = byte_data[current++];
+	int {field_name}_len = ntohs(*((uint16_t*)(byte_data + current)));
+	current += 2;
 	msg.{field_name} = malloc({field_name}_len + 1);
 	if(msg.{field_name} == NULL){{
 		{free_resources}
@@ -198,7 +202,8 @@ decode_string_field = """
 	msg.{field_name}[{field_name}_len] = '\\0';
 	current += {field_name}_len;"""
 decode_pointer_field = """
-	msg.{field_name}_len = byte_data[current++];
+	msg.{field_name}_len = ntohs(*((uint16_t*)(byte_data + current)));
+	current += 2;
 	msg.{field_name} = malloc(msg.{field_name}_len * sizeof({type}));
 	if(msg.{field_name} == NULL) {{
 		{free_resources}
@@ -217,14 +222,19 @@ encode_array_field = """
 	current += {length} * sizeof({type});"""
 encode_string_field = """
 	int {field_name}_len = strlen(msg.{field_name});
-	if({field_name}_len > 255) {{
+	if({field_name}_len > MAX_STRING_SIZE) {{
 		return PTR_FIELD_TOO_LONG;
 	}}
-	buff[current++] = {field_name}_len;
+	*((uint16_t*)(buff + current)) = htons({field_name}_len);
+	current += 2;
 	memcpy(buff + current, msg.{field_name}, {field_name}_len);
 	current += {field_name}_len;"""
 encode_pointer_field = """
-	buff[current++] = msg.{field_name}_len;
+	if(msg.{field_name}_len > MAX_PTR_COUNT) {
+		return PTR_FIELD_TOO_LONG;
+	}
+	*((uint16_t*)(buff + current)) = htons(msg.{field_name}_len)
+	current += 2;
 	memcpy(buff + current, msg.{field_name}, msg.{field_name}_len * sizeof({type}));
 	current += msg.{field_name}_len * sizeof({type});"""
 
