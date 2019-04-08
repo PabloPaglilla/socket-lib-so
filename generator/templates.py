@@ -228,7 +228,7 @@ encode_pointer_field = """
 	memcpy(buff + current, msg.{field_name}, msg.{field_name}_len * sizeof({type}));
 	current += msg.{field_name}_len * sizeof({type});"""
 
-init_simple_field = "msg->{field_name} = {field_name};"
+init_simple_field = "\tmsg->{field_name} = {field_name};"
 init_array_field = "\tmemcpy(msg->{field_name}, {field_name}, {length} * sizeof({type}));"
 init_string_field = """
 	if({field_name} == NULL) {{
@@ -255,7 +255,9 @@ init_pointer_field = """
 	}}
 	memcpy(msg->{field_name}, {field_name}, {field_name}_len * sizeof({type}));"""
 
-destroy_field = "free(msg->{field_name});"
+destroy_field = \
+"""free(msg->{field_name});
+	msg->{field_name} = NULL;"""
 
 simple_field_assignment = "msg.{field_name} = {field_name};"
 
