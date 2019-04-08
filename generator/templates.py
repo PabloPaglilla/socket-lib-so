@@ -236,7 +236,7 @@ encode_pointer_field = """
 	if(msg.{field_name}_len > MAX_PTR_COUNT) {{
 		return PTR_FIELD_TOO_LONG;
 	}}
-	*((uint16_t*)(buff + current)) = htons(msg.{field_name}_len)
+	*((uint16_t*)(buff + current)) = htons(msg.{field_name}_len);
 	current += 2;
 	memcpy(buff + current, msg.{field_name}, msg.{field_name}_len * sizeof({type}));
 	current += msg.{field_name}_len * sizeof({type});"""
