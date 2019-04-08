@@ -114,8 +114,8 @@ def generate_header(root, header):
 		-header: el objeto archivo al que escribir"""
 
 	max_msg_size = 0
-	header.write(templates.header_includes)
 	header.write(templates.header_defines)
+	header.write(templates.header_includes)
 	header.write(templates.errors_enum)
 	generate_enum_definitions(header, root)
 	for message in root.iter('message'):

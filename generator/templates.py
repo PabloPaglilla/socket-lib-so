@@ -1,5 +1,6 @@
 
 header_includes = """#include <stdint.h> 
+
 """
 
 source_includes = """#include <stdint.h>
@@ -18,10 +19,8 @@ int _send_full_msg(int, uint8_t*, int);
 int get_max_msg_size();
 """
 
-header_defines = """
-#ifndef PROTOCOL_H_INCLUDED
+header_defines = """#ifndef PROTOCOL_H_INCLUDED
 #define PROTOCOL_H_INCLUDED
-
 """
 
 header_close = """
