@@ -39,13 +39,13 @@ int decode(void*, void*, int);
 int destroy(void*);
 int bytes_needed_to_pack(void*);
 int send_msg(int, void*);
-int struct_size_from_id(uint8_t);
 
 int pack_msg(uint16_t, void*, uint8_t*);
 
 int recv_msg(int, void*, int);
 
 int get_max_msg_size();
+uint8_t get_msg_id(void*);
 """
 
 message_defines_template = """
@@ -469,6 +469,10 @@ int get_max_msg_size() {{
 		}}
 	}}
 	return max;
+}}
+
+uint8_t get_msg_id(void* msg) {{
+	return ((uint8_t*) msg)[0];
 }}
 """
 
