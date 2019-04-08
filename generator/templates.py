@@ -12,6 +12,7 @@ source_includes = """#include <stdint.h>
 
 #define MAX_STRING_SIZE 2048
 #define MAX_PTR_COUNT 1024
+#define MAX_ENCODED_SIZE 65535
 
 int _send_full_msg(int, uint8_t*, int);
 int get_max_msg_size();
@@ -28,7 +29,7 @@ header_close = """
 
 errors_enum = """enum errors { UNKNOWN_ID = -20, BAD_DATA,
 	ALLOC_ERROR, BUFFER_TOO_SMALL, PTR_FIELD_TOO_LONG,
-	CONN_CLOSED, SOCKET_ERROR = -1 };
+	MESSAGE_TOO_BIG, CONN_CLOSED, SOCKET_ERROR = -1 };
 """
 
 enum_definition = """enum {enum_name} {{ {values} }};
@@ -74,6 +75,9 @@ int encoded_{msg_name}_size(void* data) {{
 	struct {msg_name}* msg = (struct {msg_name}*) data;
 	int encoded_size = 1;
 	{add_field_sizes}
+	if(encoded_size > MAX_ENCODED_SIZE) {{
+		return MESSAGE_TOO_BIG;
+	}}
 	return encoded_size;
 }}
 
