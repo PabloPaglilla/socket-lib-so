@@ -414,6 +414,7 @@ int recv_n_bytes(int socket_fd, void* buffer, int bytes_to_read) {{
 		}}
 		bytes_rcvd += num_bytes;
 	}}
+	return 0;
 }}
 
 uint16_t recv_header(int socket_fd) {{
