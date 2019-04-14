@@ -311,8 +311,15 @@ def generate_functions(file, message):
 	ntoh = net_to_host_handling(message)
 	hton = host_to_net_handling(message)
 	params_passing = create_parameters_passing(message)
+	optional_struct_casting = ""
+	fields = list(message.iter('field'))
+	pointer_fields = list(filter(lambda field: is_pointer_type(field), fields))
+	if len(pointer_fields) != 0:
+		optional_struct_casting = templates.optional_struct_casting.format(
+			msg_name=msg_name)
 	s = templates.message_functions_template.format(
 		msg_name=msg_name, msg_name_upper=msg_name.upper(),
+		optional_struct_casting=optional_struct_casting,
 		create_parameters=create_params,
 		network_to_host=ntoh,
 		host_to_network=hton,

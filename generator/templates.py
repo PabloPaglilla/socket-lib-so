@@ -69,9 +69,11 @@ int pack_{msg_name}({create_parameters} uint8_t *, int);
 int send_{msg_name}({create_parameters} int);
 """
 
+optional_struct_casting = "struct {msg_name}* msg = (struct {msg_name}*) buffer;"
+
 message_functions_template = """
-int encoded_{msg_name}_size(void* data) {{
-	struct {msg_name}* msg = (struct {msg_name}*) data;
+int encoded_{msg_name}_size(void* buffer) {{
+	{optional_struct_casting}
 	int encoded_size = 1;
 	{add_field_sizes}
 	if(encoded_size > MAX_ENCODED_SIZE) {{
@@ -124,7 +126,7 @@ int init_{msg_name}({create_parameters} struct {msg_name}* msg) {{
 }}
 
 void destroy_{msg_name}(void* buffer) {{
-	struct {msg_name}* msg = (struct {msg_name}*) buffer;
+	{optional_struct_casting}
 	{destroy_fields}
 }}
 
