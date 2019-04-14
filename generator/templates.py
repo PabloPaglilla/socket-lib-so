@@ -135,7 +135,7 @@ int pack_{msg_name}({create_parameters} uint8_t *buff, int max_size) {{
 	if((error = init_{msg_name}({parameter_pass} &msg)) < 0) {{
 		return error;
 	}}
-	if((encoded_size = encode_{msg_name}(&msg, local_buffer, max_size - 1)) < 0) {{
+	if((encoded_size = encode_{msg_name}(&msg, local_buffer, max_size - 2)) < 0) {{
 		destroy_{msg_name}(&msg);
 		return encoded_size;
 	}}
@@ -433,7 +433,6 @@ int recv_msg(int socket_fd, void* buffer, int max_size) {{
 	}}
 	
 	uint16_t msg_size = 0;
-	uint8_t msg_id = 0;
 	int error;
 	
 	if((msg_size = recv_header(socket_fd)) < 0) {{
