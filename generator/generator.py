@@ -5,17 +5,11 @@ from os import path, remove
 
 import templates, exceptions
 
-type_sizes = {
-	'int8_t': 1,
-	'uint8_t': 1,
-	'int16_t': 2,
-	'uint16_t': 2,
-	'int32_t': 4,
-	'uint32_t': 4,
-	'char': 1
-}
-
-UINT8_MAX = 2 ** 8 - 1
+types = ['int8_t', 'uint8_t', 
+		'int16_t', 'uint16_t',
+		'int32_t', 'uint32_t',
+		'int64_t', 'uint64_t',
+		'char']
 
 def generate(xml_source, provided_path):
 
@@ -94,8 +88,11 @@ def get_name(element):
 def get_len(element):
 	return _get_element_attribute(element, 'len')
 
+def get_id(element):
+	return _get_element_attribute(element, 'id')
+
 def _is_valid_type(element_type):
-	return element_type in type_sizes or element_type[0:-2] in type_sizes
+	return element_type in types or element_type[0:-2] in types or element_type[0:-1] in types
 
 def get_type(element):
 
@@ -117,19 +114,16 @@ def generate_header(root, header):
 		-header: el objeto archivo al que escribir"""
 
 	max_msg_size = 0
-	header.write(templates.header_includes)
 	header.write(templates.header_defines)
+	header.write(templates.header_includes)
 	header.write(templates.errors_enum)
 	generate_enum_definitions(header, root)
 	for message in root.iter('message'):
-		msg_size = get_message_size(message)
-		if msg_size > max_msg_size:
-			max_msg_size = msg_size
 		generate_msg_defines(header, message)
 		generate_struct(header, message)
 		generate_signatures(header, message)
 	header.write(templates.msg_handling_functions_declarations)
-	header.write(templates.header_close.format(max_msg_size=max_msg_size))
+	header.write(templates.header_close)
 
 def generate_enum_definitions(file, root):
 
@@ -160,34 +154,9 @@ def generate_msg_defines(file, message):
 	msg_name = get_name(message)
 	s = templates.message_defines_template.format(
 		msg_name_upper=msg_name.upper(),
-		msg_size = get_message_size(message))
+		msg_name=msg_name,
+		msg_id=get_id(message))
 	file.write(s)
-
-def get_message_size(message):
-
-	"""Retorna el tamaño de un mensaje en bytes.
-	   Parametros:
-	   	-message: el elemento xml del mensaje"""
-
-	sizes = list(map(get_field_size, message.iter('field')))
-	total_size = sum(sizes)
-	if total_size >= UINT8_MAX:
-		raise exceptions.MessageTooBigException(get_name(message), total_size)
-	return total_size
-
-def get_field_size(field):
-
-	"""Retorna el tamaño de un campo de un mensaje.
-	   Parametros:
-	   	-field: el elemento xml del campo"""
-
-	field_type = get_type(field)
-	if is_array_type(field):
-		type_name = field_type[0:-2]
-		type_size = type_sizes[type_name]
-		amount = int(get_len(field))
-		return type_size * amount
-	return type_sizes[field_type]
 
 def generate_struct(file, message):
 
@@ -210,6 +179,13 @@ def field_declaration(field):
 	   Parametros:
 	   	-field: el elemento xml del campo"""
 
+	if is_pointer_type(field) and not is_string_type(field):
+		ret = templates.field_description_template.format(
+			field_type='\tuint8_t',
+			field_name=field.text + '_len;',
+			array_def='')
+		ret += '\t' + field_description(field) + ';'
+		return ret
 	return field_description(field) + ';'
 
 def field_description(field):
@@ -249,8 +225,18 @@ def create_parameters(message):
 	   Parametros:
 	   	-message: el elemento xml del mensaje"""
 
-	params = list(map(field_description, message.iter('field')))
-	return ", ".join(params)
+	param_list = list(map(single_create_parameter, message.iter('field')))
+	params = ", ".join(param_list)
+	if params != '':
+		params += ','
+	return params
+
+def single_create_parameter(field):
+	if is_pointer_type(field) and not is_string_type(field):
+		return templates.pointer_create_parameter.format(
+			field_name=field.text,
+			field_description=field_description(field))
+	return field_description(field)
 
 def create_parameters_passing(message):
 
@@ -264,8 +250,17 @@ def create_parameters_passing(message):
 	   Parametros:
 	   	-message: el elemento xml del mensaje"""
 
-	params = list(map(lambda x: x.text, message.iter('field')))
-	return ", ".join(params)
+	param_list = list(map(single_create_parameter_pass, message.iter('field')))
+	params = ", ".join(param_list)
+	if params != '':
+		params += ','
+	return params
+
+def single_create_parameter_pass(field):
+	if is_pointer_type(field) and not is_string_type(field):
+		return templates.pointer_create_parameter_pass.format(
+			field_name=field.text)
+	return field.text
 
 def type_contains(field, str):
 
@@ -284,6 +279,12 @@ def is_array_type(field):
 	   	-field: el elemento xml del campo"""
 
 	return type_contains(field, '[]')
+
+def is_string_type(field):
+	return type_contains(field, 'char*')
+
+def is_pointer_type(field):
+	return type_contains(field, '*')
 
 def generate_source(root, source, header_name):
 
@@ -309,16 +310,153 @@ def generate_functions(file, message):
 	create_params = create_parameters(message)
 	ntoh = net_to_host_handling(message)
 	hton = host_to_net_handling(message)
-	fields_assign = fields_assignment(message)
 	params_passing = create_parameters_passing(message)
+	optional_struct_casting = ""
+	fields = list(message.iter('field'))
+	pointer_fields = list(filter(lambda field: is_pointer_type(field), fields))
+	if len(pointer_fields) != 0:
+		optional_struct_casting = templates.optional_struct_casting.format(
+			msg_name=msg_name)
 	s = templates.message_functions_template.format(
 		msg_name=msg_name, msg_name_upper=msg_name.upper(),
+		optional_struct_casting=optional_struct_casting,
 		create_parameters=create_params,
-		net_to_host_handling=ntoh,
-		host_to_net_handling=hton,
-		fields_assignment=fields_assign,
-		parameter_pass=params_passing)
+		network_to_host=ntoh,
+		host_to_network=hton,
+		parameter_pass=params_passing,
+		add_field_sizes=add_field_sizes(message),
+		decode_fields=decode_fields(message),
+		encode_fields=encode_fields(message),
+		destroy_fields=destroy_fields(message),
+		init_fields=init_fields(message))
 	file.write(s)
+
+def add_field_sizes(message):
+	return '\n'.join(list(map(add_field_size, message.iter('field'))))
+
+def add_field_size(field):
+	if is_array_type(field):
+		return templates.add_array_field_size.format(
+			type=get_type(field)[0:-2], length=get_len(field))
+	elif is_string_type(field):
+		return templates.add_string_field_size.format(
+			field_name=field.text)
+	elif is_pointer_type(field):
+		return templates.add_pointer_field_size.format(
+			field_name=field.text,
+			type=get_type(field)[0:-1])
+	else:
+		return templates.add_simple_field_size.format(
+			type=get_type(field))
+
+def decode_fields(message):
+	pointers_to_free_on_error = []
+	field_decodes = []
+	for field in message.iter('field'):
+		field_decodes.append(decode_field(field, pointers_to_free_on_error))
+	return ''.join(field_decodes)
+
+def decode_field(field, pointers_to_free_on_error):
+	if is_array_type(field):
+		return templates.decode_array_field.format(
+			field_name=field.text,
+			type=get_type(field)[0:-2],
+			length=get_len(field))
+	elif is_string_type(field):
+		ret = templates.decode_string_field.format(
+			field_name=field.text,
+			free_resources=free_decode_pointers(pointers_to_free_on_error))
+		pointers_to_free_on_error.append(field.text)
+		return ret
+	elif is_pointer_type(field):
+		ret = templates.decode_pointer_field.format(
+			field_name=field.text,
+			type=get_type(field)[0:-1],
+			free_resources=free_decode_pointers(pointers_to_free_on_error))
+		pointers_to_free_on_error.append(field.text)
+		return ret
+	else:
+		return templates.decode_simple_field.format(
+			field_name=field.text,
+			type=get_type(field))
+
+def free_decode_pointers(pointers_to_free_on_error):
+	return '\n'.join(
+		list(
+			map(
+				lambda x: templates.free_decode_pointer.format(field_name=x),
+				pointers_to_free_on_error
+			)
+		)
+	)
+
+def encode_fields(message):
+	return '\n'.join(list(map(encode_field, message.iter('field'))))
+
+def encode_field(field):
+	if is_array_type(field):
+		return templates.encode_array_field.format(
+			field_name=field.text,
+			type=get_type(field)[0:-2],
+			length=get_len(field),
+			host_to_network='')
+	elif is_string_type(field):
+		return templates.encode_string_field.format(
+			field_name=field.text)
+	elif is_pointer_type(field):
+		return templates.encode_pointer_field.format(
+			field_name=field.text,
+			type=get_type(field)[0:-1])
+	else:
+		return templates.encode_simple_field.format(
+			field_name=field.text,
+			type=get_type(field),
+			host_to_network='')
+
+def init_fields(message):
+	pointers_to_free_on_error = []
+	field_inits = []
+	for field in message.iter('field'):
+		field_inits.append(init_field(field, pointers_to_free_on_error))
+	return '\n'.join(field_inits)
+
+def init_field(field, pointers_to_free_on_error):
+	if is_array_type(field):
+		return templates.init_array_field.format(
+			field_name=field.text,
+			type=get_type(field)[0:-2],
+			length=get_len(field))
+	elif is_string_type(field):
+		ret = templates.init_string_field.format(
+			field_name=field.text,
+			free_resources=free_init_pointers(pointers_to_free_on_error))
+		pointers_to_free_on_error.append(field.text)
+		return ret
+	elif is_pointer_type(field):
+		ret = templates.init_pointer_field.format(
+			field_name=field.text,
+			type=get_type(field)[0:-1],
+			free_resources=free_init_pointers(pointers_to_free_on_error))
+		pointers_to_free_on_error.append(field.text)
+		return ret
+	else:
+		return templates.init_simple_field.format(field_name=field.text)
+
+def free_init_pointers(pointers_to_free_on_error):
+	return '\n'.join(list(map(
+				lambda x: templates.destroy_field.format(field_name=x),
+				pointers_to_free_on_error
+			)))	
+
+def destroy_fields(message):
+	l = []
+	for field in message.iter('field'):
+		if is_pointer_type(field):
+			l.append(destroy_field(field))
+	return '\n\t'.join(l)
+
+def destroy_field(field):
+	return templates.destroy_field.format(field_name=field.text)
 
 def get_ntoh_converter(field):
 
@@ -331,6 +469,8 @@ def get_ntoh_converter(field):
 		return templates.uint16_ntoh
 	elif is_uint32(field):
 		return templates.uint32_ntoh
+	elif is_uint64(field):
+		return templates.uint64_ntoh
 
 def get_hton_converter(field):
 
@@ -343,6 +483,8 @@ def get_hton_converter(field):
 		return templates.uint16_hton
 	elif is_uint32(field):
 		return templates.uint32_hton
+	elif is_uint64(field):
+		return templates.uint64_hton
 
 def net_to_host_handling(message):
 
@@ -383,6 +525,8 @@ def convert(message, convert_getter):
 			field_name = field.text
 			if is_array_type(field):
 				s = array_convertion(field_name, convertion, field)
+			elif is_pointer_type(field):
+				s = pointer_convertion(field_name, convertion)
 			else:
 				s = simple_field_convertion(field_name, convertion)
 			ret += '\n\t' + s
@@ -404,6 +548,11 @@ def array_convertion(field_name, convertion, field):
 					field_name=field_name, len=lng,
 					convertion=convertion)
 
+def pointer_convertion(field_name, convertion):
+	return templates.pointer_field_converter.format(
+		field_name=field_name,
+		convertion=convertion)
+
 def simple_field_convertion(field_name, convertion):
 
 	"""Retorna la linea de código que aplica la función
@@ -424,7 +573,7 @@ def should_be_converted(field):
 	   Parametros:
 	   	-field: el elemento xml del campo"""
 
-	return is_uint16(field) or is_uint32(field)
+	return is_uint16(field) or is_uint32(field) or is_uint64(field)
 
 def is_uint16(field):
 
@@ -444,46 +593,8 @@ def is_uint32(field):
 
 	return type_contains(field, '32')
 
-def fields_assignment(message):
-
-	"""Retorna el código que asigna a los campos de un mensaje los
-	valores recibidos por parámetro en la función create.
-	   Parametros:
-	   	-message: el elemento xml del mensaje"""
-
-	ret = ''
-	for field in message.iter('field'):
-		field_name = field.text
-		if is_array_type(field):
-			s = array_field_assignment(field_name, field)
-		else:
-			s = simple_field_assignment(field_name)
-		ret += '\n\t' + s
-	return ret
-
-def array_field_assignment(field_name, field):
-
-	"""Retorna el código que asigna a un campo de un mensaje
-	cuando el campo es de tipo array usando memcpy.
-	   Parametros:
-	   	-field_name: nombre del campo
-	   	-field: elemento xml del campo"""
-
-	lng = get_len(field)
-	field_type = get_type(field)[0:-2]
-	return templates.array_field_assignment.format(
-		field_name=field_name, len=lng,
-		field_type=field_type)
-
-def simple_field_assignment(field_name):
-
-	"""Retorna el código que asigna a un campo de un mensaje
-	cuando el campo no es de tipo array.
-	   Parametros:
-	   	-field_name: nombre del campo"""
-
-	return templates.simple_field_assignment.format(
-		field_name=field_name)
+def is_uint64(field):
+	return type_contains(field, '64')
 
 def generate_handling_functions(file, root):
 
@@ -493,27 +604,43 @@ def generate_handling_functions(file, root):
 	   	-file: archivo al que escribir
 	   	-root: elemento root del archivo xml"""
 
-	switch_cases = decoder_switch_cases(root)
 	s = templates.msg_handling_functions.format(
-		switch_cases=switch_cases)
+		decode_switch_cases=decode_switch_cases(root),
+		destroy_switch_cases=destroy_switch_cases(root),
+		bytes_needed_switch_cases=bytes_needed_switch_cases(root),
+		send_switch_cases=send_switch_cases(root),
+		struct_size_switch_cases=struct_size_switch_cases(root),
+		number_of_messages=len(list(root.iter('message'))),
+		struct_sizes=(',\n' + '\t'*5).join(list(map(get_struct_sizeof, root.iter('message')))))
 	file.write(s)
 
-def decoder_switch_cases(root):
+def decode_switch_cases(root):
+	return switch_cases(root, templates.decode_switch_case)	
 
-	"""Retorna el string del switch que se utilizará en la
-	función decode para reconocer el tipo del mensaje y
-	actual acorde.
-	   Parametros:
-	   	-root: elemento root del archivo xml"""
+def destroy_switch_cases(root):
+	return switch_cases(root, templates.destroy_switch_case)
+
+def bytes_needed_switch_cases(root):
+	return switch_cases(root, templates.bytes_needed_switch_case)
+
+def send_switch_cases(root):
+	return switch_cases(root, templates.send_switch_cases)
+
+def struct_size_switch_cases(root):
+	return switch_cases(root, templates.struct_size_switch_case)
+
+def switch_cases(root, template):
 
 	ret = ''
-	template = templates.decoder_switch_case
 	for message in root.iter('message'):
 		msg_name = get_name(message)
 		ret += '\n\t' + template.format(
 			msg_name=msg_name,
 			msg_name_upper=msg_name.upper())
 	return ret
+
+def get_struct_sizeof(message):
+	return templates.struct_size.format(msg_name=get_name(message))
 
 def parse_cli_arguments():
 
